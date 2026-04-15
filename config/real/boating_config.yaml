@@ -1,0 +1,27 @@
+trajectory_planner:
+  ros__parameters:
+    odom_topic: "/pf/pose/odom"
+    map_topic: "/map"
+
+trajectory_follower:
+  ros__parameters:
+    odom_topic: "/pf/pose/odom"
+    drive_topic: "/vesc/input/navigation"
+
+safety_controller:
+  ros__parameters:
+    scan_topic: "/scan"
+    safety_topic: "/vesc/low_level/input/safety"
+
+overall_controller:
+  ros__parameters:
+    odom_topic: "/pf/pose/odom"
+    drive_topic: "/vesc/input/navigation"
+
+object_detector:
+  ros__parameters:
+    camera_topic: "/zed/rgb/image_rect_color"
+
+traffic_light_detector:
+  ros__parameters:
+    camera_topic: "/zed/rgb/image_rect_color"

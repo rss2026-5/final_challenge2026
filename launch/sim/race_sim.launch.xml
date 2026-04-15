@@ -1,0 +1,11 @@
+<launch>
+    <node pkg="final_challenge" exec="lane_detector" name="lane_detector" output="screen">
+        <param from="$(find-pkg-share final_challenge)/config/sim/race_config.yaml"/>
+    </node>
+    <node pkg="final_challenge" exec="lane_follower" name="lane_follower" output="screen">
+        <param from="$(find-pkg-share final_challenge)/config/sim/race_config.yaml"/>
+    </node>
+    <node pkg="final_challenge" exec="race_safety_controller" name="race_safety_controller" output="screen">
+        <param from="$(find-pkg-share final_challenge)/config/sim/race_config.yaml"/>
+    </node>
+</launch>

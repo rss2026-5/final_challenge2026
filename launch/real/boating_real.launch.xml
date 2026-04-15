@@ -1,0 +1,34 @@
+<launch>
+    <!-- Part B: Mrs. Puff's Boating School (real hardware) -->
+
+    <!-- Localization stack (from separate package) -->
+    <include file="$(find-pkg-share localization)/launch/localize_real.launch.xml"/>
+
+    <!-- Path planning stack -->
+    <node pkg="final_challenge" exec="trajectory_planner" name="trajectory_planner" output="screen">
+        <param from="$(find-pkg-share final_challenge)/config/real/boating_config.yaml"/>
+    </node>
+
+    <node pkg="final_challenge" exec="trajectory_follower" name="trajectory_follower" output="screen">
+        <param from="$(find-pkg-share final_challenge)/config/real/boating_config.yaml"/>
+    </node>
+
+    <!-- Safety -->
+    <node pkg="final_challenge" exec="safety_controller" name="safety_controller" output="screen">
+        <param from="$(find-pkg-share final_challenge)/config/real/boating_config.yaml"/>
+    </node>
+
+    <!-- Perception -->
+    <node pkg="final_challenge" exec="object_detector" name="object_detector" output="screen">
+        <param from="$(find-pkg-share final_challenge)/config/real/boating_config.yaml"/>
+    </node>
+
+    <node pkg="final_challenge" exec="traffic_light_detector" name="traffic_light_detector" output="screen">
+        <param from="$(find-pkg-share final_challenge)/config/real/boating_config.yaml"/>
+    </node>
+
+    <!-- Overall controller -->
+    <node pkg="final_challenge" exec="overall_controller" name="overall_controller" output="screen">
+        <param from="$(find-pkg-share final_challenge)/config/real/boating_config.yaml"/>
+    </node>
+</launch>
