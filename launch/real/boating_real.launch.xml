@@ -4,6 +4,16 @@
     <!-- Localization stack (from separate package) -->
     <include file="$(find-pkg-share localization)/launch/localize_real.launch.xml"/>
 
+    <!-- Map server for stata basement -->
+    <arg name="map" default="$(find-pkg-share final_challenge)/maps/stata_basement.yaml"/>
+    <node name="map_server" pkg="nav2_map_server" exec="map_server" output="screen">
+        <param name="yaml_filename" value="$(var map)"/>
+    </node>
+    <node name="lifecycle_manager" pkg="nav2_lifecycle_manager" exec="lifecycle_manager" output="screen">
+        <param name="autostart" value="True"/>
+        <param name="node_names" value="['map_server']"/>
+    </node>
+
     <!-- Path planning stack -->
     <node pkg="final_challenge" exec="trajectory_planner" name="trajectory_planner" output="screen">
         <param from="$(find-pkg-share final_challenge)/config/real/boating_config.yaml"/>

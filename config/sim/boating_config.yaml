@@ -17,6 +17,9 @@ overall_controller:
   ros__parameters:
     odom_topic: "/odom"
     drive_topic: "/drive"
+    goal_arrival_threshold: 1.0
+    parking_duration: 5.0
+    detection_window: 3.0
 
 object_detector:
   ros__parameters:
