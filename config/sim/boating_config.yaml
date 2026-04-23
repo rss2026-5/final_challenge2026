@@ -18,8 +18,18 @@ overall_controller:
     odom_topic: "/odom"
     drive_topic: "/drive"
     goal_arrival_threshold: 1.0
+    pass_arrival_threshold: 2.0
     parking_duration: 5.0
     detection_window: 3.0
+    # Flat [x, y, yaw, ...] tracing the long-way loop back to the start
+    # box. Appended after the last parking goal completes. Empty
+    # (or a single-element placeholder) disables homecoming.
+    return_waypoints: [
+      -30.0,   34.0,    0.0,    # push north-west out of goal-2 corridor
+      -53.0,   34.0,    0.0,    # up the west-side hallway
+      -54.76,  -0.51,   0.0,    # around the bottom corner
+      -18.396, -0.573,  2.245,  # back at start box
+    ]
 
 object_detector:
   ros__parameters:
@@ -28,3 +38,50 @@ object_detector:
 traffic_light_detector:
   ros__parameters:
     camera_topic: "/zed/rgb/image_rect_color"
+
+# --- Part B sim harness ---
+# Coordinates below are placeholders calibrated roughly from
+# media/final_challenge_bikini_bottom.png (stata_basement.yaml origin =
+# [25.9, 48.5, 3.14], resolution = 0.0504). Tune in rviz once the sim
+# comes up.
+
+initial_pose_publisher:
+  ros__parameters:
+    x: -18.396
+    y: -0.573
+    yaw: 2.245
+    frame_id: "map"
+    topic: "/initialpose"
+    publish_count: 5
+    publish_period: 0.5
+
+basement_point_publisher:
+  ros__parameters:
+    topic: "/exploring_challenge"
+    frame_id: "map"
+    # Two goals = two "example spots" on the bikini bottom map.
+    # Flat [x, y, yaw, x, y, yaw].
+    goals: [-4.51, 24.05, 0.0, -20.27, 27.28, 0.0]
+    startup_delay: 3.0
+
+sim_environment:
+  ros__parameters:
+    odom_topic: "/odom"
+    object_detection_topic: "/object_detection"
+    traffic_light_topic: "/traffic_light/state"
+    # Must match basement_point_publisher goals (x, y only).
+    goal_points: [-4.51, 24.05, -20.27, 27.28]
+    goal_detection_radius: 1.5
+    goal_detection_probabilities: [1.0, 1.0]
+    # By default the sim does NOT drive /traffic_light/state at all — publish
+    # it yourself to test a pause:
+    #   ros2 topic pub --once /traffic_light/state std_msgs/msg/Bool "data: true"
+    #   ros2 topic pub --once /traffic_light/state std_msgs/msg/Bool "data: false"
+    # Set simulate_red_light: true to re-enable proximity triggering, or
+    # startup_red_duration > 0 for an auto red at launch.
+    simulate_red_light: false
+    traffic_light_point: [-10.51, 15.83]
+    traffic_light_radius: 2.0
+    red_light_duration: 3.0
+    startup_red_duration: 0.0
+    pedestrian_present: false

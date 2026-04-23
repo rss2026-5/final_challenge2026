@@ -1,6 +1,14 @@
 <launch>
-    <!-- Map server for stata basement -->
     <arg name="map" default="$(find-pkg-share final_challenge)/maps/stata_basement.yaml"/>
+    <arg name="use_real_detectors" default="false"
+         description="If true, run the camera-based detectors (no-ops in sim without a camera). If false, sim_environment fakes /object_detection and /traffic_light/state."/>
+    <arg name="use_simulator" default="true"
+         description="If true, include racecar_simulator. Set false when running inside the real-car Docker or when sim is already running."/>
+
+    <!-- Racecar simulator (publishes /odom, /scan, consumes /drive) -->
+    <include file="$(find-pkg-share racecar_simulator)/launch/simulate.launch.xml" if="$(var use_simulator)"/>
+
+    <!-- Map server for stata basement -->
     <node name="map_server" pkg="nav2_map_server" exec="map_server" output="screen">
         <param name="yaml_filename" value="$(var map)"/>
     </node>
@@ -9,8 +17,20 @@
         <param name="node_names" value="['map_server']"/>
     </node>
 
-    <!-- Path planning -->
-    <node pkg="final_challenge" exec="trajectory_planner" name="trajectory_planner" output="screen">
+    <!-- Sim harness: seed initial pose + goals + fake stimuli -->
+    <node pkg="final_challenge" exec="initial_pose_publisher" name="initial_pose_publisher" output="screen">
+        <param from="$(find-pkg-share final_challenge)/config/sim/boating_config.yaml"/>
+    </node>
+    <node pkg="final_challenge" exec="basement_point_publisher" name="basement_point_publisher" output="screen">
+        <param from="$(find-pkg-share final_challenge)/config/sim/boating_config.yaml"/>
+    </node>
+    <node pkg="final_challenge" exec="sim_environment" name="sim_environment" output="screen"
+          unless="$(var use_real_detectors)">
+        <param from="$(find-pkg-share final_challenge)/config/sim/boating_config.yaml"/>
+    </node>
+
+    <!-- Path planning (RRT*; swap exec to trajectory_planner or trajectory_planner_astar to change) -->
+    <node pkg="final_challenge" exec="rrt_planner" name="trajectory_planner" output="screen">
         <param from="$(find-pkg-share final_challenge)/config/sim/boating_config.yaml"/>
     </node>
     <node pkg="final_challenge" exec="trajectory_follower" name="trajectory_follower" output="screen">
@@ -22,11 +42,13 @@
         <param from="$(find-pkg-share final_challenge)/config/sim/boating_config.yaml"/>
     </node>
 
-    <!-- Computer Vision -->
-    <node pkg="final_challenge" exec="object_detector" name="object_detector" output="screen">
+    <!-- Computer Vision (no-ops in sim; fake stimuli live in sim_environment) -->
+    <node pkg="final_challenge" exec="object_detector" name="object_detector" output="screen"
+          if="$(var use_real_detectors)">
         <param from="$(find-pkg-share final_challenge)/config/sim/boating_config.yaml"/>
     </node>
-    <node pkg="final_challenge" exec="traffic_light_detector" name="traffic_light_detector" output="screen">
+    <node pkg="final_challenge" exec="traffic_light_detector" name="traffic_light_detector" output="screen"
+          if="$(var use_real_detectors)">
         <param from="$(find-pkg-share final_challenge)/config/sim/boating_config.yaml"/>
     </node>
 

@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
+import math
 import numpy as np
 import rclpy
 from rclpy.node import Node
 from enum import Enum
-from geometry_msgs.msg import PoseArray, PoseStamped
+from geometry_msgs.msg import PoseArray, Pose, PoseStamped
 from nav_msgs.msg import Odometry
 from std_msgs.msg import Bool, String
 from ackermann_msgs.msg import AckermannDriveStamped
@@ -19,6 +20,11 @@ class State(Enum):
     DONE = "DONE"
 
 
+class GoalType(Enum):
+    PARK = "PARK"   # stop, detect, park 5s, then advance
+    PASS = "PASS"   # drive through with loose tolerance, then advance
+
+
 class OverallController(Node):
     def __init__(self):
         super().__init__("overall_controller")
@@ -27,17 +33,27 @@ class OverallController(Node):
         self.declare_parameter("odom_topic", "/odom")
         self.declare_parameter("drive_topic", "/drive")
         self.declare_parameter("goal_arrival_threshold", 1.0)
+        self.declare_parameter("pass_arrival_threshold", 2.0)
         self.declare_parameter("parking_duration", 5.0)
         self.declare_parameter("detection_window", 3.0)
+        #[x, y, yaw] waypoints as intermediate steps to hardcode long loop back.
+        #appended to the queue after the last PARK completes.
+        self.declare_parameter("return_waypoints", [0.0])
 
         odom_topic = self.get_parameter("odom_topic").value
         drive_topic = self.get_parameter("drive_topic").value
         self.goal_arrival_threshold = self.get_parameter("goal_arrival_threshold").value
+        self.pass_arrival_threshold = self.get_parameter("pass_arrival_threshold").value
         self.parking_duration = self.get_parameter("parking_duration").value
         self.detection_window = self.get_parameter("detection_window").value
+        self.return_waypoints = self._parse_waypoints(
+            list(self.get_parameter("return_waypoints").value)
+        )
+        self._return_leg_appended = False
 
         # State
         self.state = State.IDLE
+        # (PoseStamped, GoalType) entries
         self.goal_queue = []
         self.current_goal_index = 0
         self.current_pose = None
@@ -75,13 +91,13 @@ class OverallController(Node):
             goal = PoseStamped()
             goal.header.frame_id = "map"
             goal.pose = pose
-            self.goal_queue.append(goal)
+            self.goal_queue.append((goal, GoalType.PARK))
 
         if len(self.goal_queue) == 0:
             self.get_logger().warn("Received empty goal list")
             return
 
-        self.get_logger().info(f"Received {len(self.goal_queue)} goals")
+        self.get_logger().info(f"Received {len(self.goal_queue)} parking goals")
         self.current_goal_index = 0
         self._publish_current_goal()
         self._transition_to(State.NAVIGATING)
@@ -96,10 +112,21 @@ class OverallController(Node):
 
         if self.state == State.NAVIGATING:
             dist = self._distance_to_current_goal()
-            if dist < self.goal_arrival_threshold:
+            goal_type = self._current_goal_type()
+            threshold = (
+                self.pass_arrival_threshold
+                if goal_type == GoalType.PASS
+                else self.goal_arrival_threshold
+            )
+            if dist < threshold:
                 self.get_logger().info(
-                    f"Arrived at goal {self.current_goal_index} (dist={dist:.2f}m)")
-                self._transition_to(State.DETECTING)
+                    f"Arrived at goal {self.current_goal_index} "
+                    f"({goal_type.value}, dist={dist:.2f}m)"
+                )
+                if goal_type == GoalType.PASS:
+                    self._transition_to(State.RETURNING)
+                else:
+                    self._transition_to(State.DETECTING)
 
     def object_detection_cb(self, msg: String):
         """YOLO detection results. Only act on them during DETECTING state."""
@@ -166,6 +193,22 @@ class OverallController(Node):
     def _advance_to_next_goal(self):
         """Move to next goal in queue, or finish if none remain."""
         self.current_goal_index += 1
+
+        #checks/adds final leg to return to starting position
+        if not self._return_leg_appended and self.current_goal_index >= len(self.goal_queue) and self.return_waypoints:
+            self._return_leg_appended = True
+            for (x, y, yaw) in self.return_waypoints:
+                pose = PoseStamped()
+                pose.header.frame_id = "map"
+                pose.pose.position.x = float(x)
+                pose.pose.position.y = float(y)
+                half = float(yaw) * 0.5
+                pose.pose.orientation.z = math.sin(half)
+                pose.pose.orientation.w = math.cos(half)
+                self.goal_queue.append((pose, GoalType.PASS))
+            self.get_logger().info(
+                f"Appended {len(self.return_waypoints)} return waypoints"
+            )
         if self.current_goal_index < len(self.goal_queue):
             self._publish_current_goal()
             self._transition_to(State.NAVIGATING)
@@ -174,12 +217,14 @@ class OverallController(Node):
 
     def _publish_current_goal(self):
         """Send current goal to trajectory_planner via /goal_pose."""
-        goal = self.goal_queue[self.current_goal_index]
+        goal, goal_type = self.goal_queue[self.current_goal_index]
         goal.header.stamp = self.get_clock().now().to_msg()
         self.goal_pub.publish(goal)
         pos = goal.pose.position
         self.get_logger().info(
-            f"Published goal {self.current_goal_index}: ({pos.x:.2f}, {pos.y:.2f})")
+            f"Published goal {self.current_goal_index} "
+            f"[{goal_type.value}]: ({pos.x:.2f}, {pos.y:.2f})"
+        )
 
     def _publish_stop(self):
         """Publish zero-velocity drive command to stop the car."""
@@ -192,10 +237,23 @@ class OverallController(Node):
         """Euclidean distance from current pose to current goal."""
         if self.current_pose is None or self.current_goal_index >= len(self.goal_queue):
             return float('inf')
-        goal_pos = self.goal_queue[self.current_goal_index].pose.position
+        goal_pos = self.goal_queue[self.current_goal_index][0].pose.position
         dx = self.current_pose[0] - goal_pos.x
         dy = self.current_pose[1] - goal_pos.y
         return np.sqrt(dx * dx + dy * dy)
+
+    def _current_goal_type(self):
+        if self.current_goal_index >= len(self.goal_queue):
+            return GoalType.PARK
+        return self.goal_queue[self.current_goal_index][1]
+
+    @staticmethod
+    def _parse_waypoints(flat):
+        """Turn a flat [x, y, yaw, ...] param into [(x, y, yaw), ...]. Empty if malformed."""
+        if len(flat) < 3 or len(flat) % 3 != 0:
+            return []
+        # The default we set is [0.0], a placeholder for "none". Real lists are >= 3.
+        return [tuple(flat[i:i + 3]) for i in range(0, len(flat), 3)]
 
 
 def main(args=None):
