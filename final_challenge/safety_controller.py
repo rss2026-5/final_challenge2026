@@ -25,7 +25,7 @@ class SafetyController(Node):
 
     # Forward zone — head-on collision prevention
     FORWARD_CONE = np.pi / 3        # ±60 deg
-    EMERGENCY_DIST = 0.25           # hard-stop threshold [m]
+    EMERGENCY_DIST = 0.4          # hard-stop threshold [m]
     RELEASE_MARGIN = 0.15           # hysteresis margin [m]
 
     # Side zone — wheel / corner clipping prevention

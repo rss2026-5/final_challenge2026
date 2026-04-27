@@ -11,4 +11,5 @@ lane_follower:
 race_safety_controller:
   ros__parameters:
     scan_topic: "/scan"
-    safety_topic: "/vesc/low_level/input/safety"
+    drive_topic: "/vesc/low_level/input/safety"
+    nav_topic: "/vesc/input/navigation"
