@@ -71,156 +71,115 @@ def detect_lane_lines(img):
         - If no lanes are detected, center and steering error will be None.
         - Assumes camera is forward-facing with lanes roughly vertical in the image.
     """
-    # --- image preprocessing ---
-    # convert from BGR to HSV
-    filename = ""
-    img_bgr = cv2.imread(img)
-    # img_bgr = img
-    # image_print(img_bgr)
+    # Load image if given as path
+    if isinstance(img, str):
+        img_bgr = cv2.imread(img)
+    else:
+        img_bgr = img.copy()
 
-    # define region of interest and crop
     img_h, img_w = img_bgr.shape[:2]
-    img_roi = img_bgr[0:img_h, 0:img_w]
-    # image_print(img_roi)
+    img_hsv = cv2.cvtColor(img_bgr, cv2.COLOR_BGR2HSV)
 
-    img_hsv = cv2.cvtColor(img_roi, cv2.COLOR_BGR2HSV)
-    # image_print(img_hsv)
-    # cv2.imwrite(filename + "_hsv.jpg", img_hsv)    
+    # --- Color thresholding for white lanes ---
+    lower_white = np.array([0, 0, 200])
+    upper_white = np.array([180, 30, 255])
+    mask_white = cv2.inRange(img_hsv, lower_white, upper_white)
 
-    # H: 0–180, S: 0–50, V: 200–255
-    # define color thresholds & generate mask
-    lower = np.array([0, 0, 200])
-    upper = np.array([180, 50, 255])
-    hsv_mask = cv2.inRange(img_hsv, lower, upper) 
+    # --- Morphology to clean the mask ---
+    kernel = np.ones((5,5), np.uint8)
+    mask_clean = cv2.morphologyEx(mask_white, cv2.MORPH_OPEN, kernel)
+    mask_clean = cv2.morphologyEx(mask_clean, cv2.MORPH_CLOSE, kernel)
 
-    # Clean it
-    kernel = np.ones((5, 5), np.uint8)
-    img_clean = cv2.morphologyEx(hsv_mask, cv2.MORPH_OPEN, kernel)
-    img_clean = cv2.morphologyEx(img_clean, cv2.MORPH_CLOSE, kernel)
+    # --- Edge detection ---
+    edges = cv2.Canny(mask_clean, 50, 150)
 
-    # image_print(img_clean)
+    # --- Hough Transform ---
+    lines = cv2.HoughLinesP(edges, 1, np.pi/180, threshold=50, minLineLength=100, maxLineGap=50)
 
-    contours, _ = cv2.findContours(img_clean, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-    # print(len(contours))
+    left_lines = []
+    right_lines = []
 
-    # --- lane detection ---
-    lane_contours = []
+    if lines is not None:
+        for line in lines:
+            x1, y1, x2, y2 = line[0]
+            slope = (y2 - y1) / (x2 - x1 + 1e-6)
+            if abs(slope) < 0.3:
+                continue  # ignore near-horizontal lines
+            if slope < 0:
+                left_lines.append(line[0])
+            else:
+                right_lines.append(line[0])
 
-    for cnt in contours:
-        area = cv2.contourArea(cnt)
-        # print(f"area: {area}")
-        if area < 500:  # tune this
-            continue
-
-        x, y, w, h = cv2.boundingRect(cnt)
-        # cv2.rectangle(img_bgr, (x, y), (x + w, y + h), (0, 255, 0), 2)
-        # image_print(img_bgr)
-
-        # lanes are typically taller than wide
-        if h > 50:
-            lane_contours.append(cnt)
-
-    # print(f"lane contours: {lane_contours}")
-    mid_x = img_w // 2
-
-    left_lane = []
-    right_lane = []
-
-    for cnt in lane_contours:
-        x, y, w_box, h_box = cv2.boundingRect(cnt)
-        cx = x + w_box // 2
-
-        if cx < mid_x:
-            left_lane.append(cnt)
-        else:
-            right_lane.append(cnt)
-
-    # print(f"left lane: {left_lane}")
-    # print(f"right lane: {right_lane}")
-
-    def fit_lane(contours):
-        if not contours:
+    def average_lane(lines):
+        if len(lines) == 0:
             return None
-        
-        points = np.vstack(contours)
-        vx, vy, x, y = [v[0] for v in cv2.fitLine(points, cv2.DIST_L2, 0, 0.01, 0.01)]
-        return vx, vy, x, y
-    
-    left_line = fit_lane(left_lane)
-    right_line = fit_lane(right_lane)
+        x_coords = []
+        y_coords = []
+        for x1, y1, x2, y2 in lines:
+            x_coords += [x1, x2]
+            y_coords += [y1, y2]
+        # fit line y = mx + b
+        poly = np.polyfit(y_coords, x_coords, 1)
+        m, b = poly
+        # return as vector form for compatibility
+        y1 = img_h
+        y2 = int(img_h * 0.5)
+        x1 = int(m * y1 + b)
+        x2 = int(m * y2 + b)
+        vx = x2 - x1
+        vy = y2 - y1
+        return (vx, vy, x1, y1)
+
+    left_line = average_lane(left_lines)
+    right_line = average_lane(right_lines)
 
     def get_x_at_y(line, y):
         if line is None:
             return None
-        
-        vx, vy, x, y0 = line
-        
+        vx, vy, x0, y0 = line
         if abs(vy) < 1e-6:
             return None
-        
-        return int(x + (y - y0) * vx / vy)
-    
-    y_eval = img_bgr.shape[0]
+        return int(x0 + (y - y0) * vx / vy)
 
+    y_eval = img_h
     left_x = get_x_at_y(left_line, y_eval)
     right_x = get_x_at_y(right_line, y_eval)
 
     lane_center = None
     if left_x is not None and right_x is not None:
         lane_center = (left_x + right_x) // 2
-
     elif left_x is not None:
-        # estimate right lane
-        lane_width = 300  # tune this
-        lane_center = left_x + lane_width // 2
-
+        lane_center = left_x + 300 // 2
     elif right_x is not None:
-        # estimate left lane
-        lane_width = 300
-        lane_center = right_x - lane_width // 2
+        lane_center = right_x - 300 // 2
 
+    # --- Visualization ---
+    output_img = img_bgr.copy()
+    def draw_line(img, line, color):
+        if line is None:
+            return
+        vx, vy, x0, y0 = line
+        y1 = img.shape[0]
+        y2 = int(img.shape[0] * 0.5)
+        x1 = int(x0 + (y1 - y0) * vx / vy)
+        x2 = int(x0 + (y2 - y0) * vx / vy)
+        cv2.line(img, (x1, y1), (x2, y2), color, 3)
 
-    # # --- visualization ---
-    # def draw_line(img, line, color):
-    #     if line is None:
-    #         return
-        
-    #     vx, vy, x, y = line
-        
-    #     h = img.shape[0]
-        
-    #     # extend line across ROI
-    #     y1 = h
-    #     y2 = int(h * 0.5)
+    draw_line(output_img, left_line, (255, 0, 0))
+    draw_line(output_img, right_line, (0, 0, 255))
+    if lane_center is not None:
+        cv2.line(output_img, (lane_center, img_h), (lane_center, int(img_h*0.5)), (0,255,255), 2)
 
-    #     x1 = int(x + (y1 - y) * vx / vy)
-    #     x2 = int(x + (y2 - y) * vx / vy)
-
-    #     cv2.line(img, (x1, y1), (x2, y2), color, 3)
-
-    # draw_line(img_bgr, left_line, (255, 0, 0))
-    # draw_line(img_bgr, right_line, (255, 0, 0))
-
-    # if lane_center is not None:
-    #     h = img_bgr.shape[0]
-
-    #     # Draw a vertical line at lane center
-    #     cv2.line(img_bgr, (lane_center, h), (lane_center, int(h * 0.5)), (0, 255, 255), 2)
-
-    #     # Draw a circle at bottom center point
-    #     cv2.circle(img_bgr, (lane_center, h - 10), 6, (0, 255, 255), -1)
-
-    # image_print(img_bgr)
-
+    image_print(output_img)
 
     return {
         "left_line": left_line,
         "right_line": right_line,
         "lane_center": lane_center,
-        "image": img_bgr
-        }  
+        "image": output_img
+    }
 
-filename = "./racetrack_images/lane_3/image1.png"
+filename = "./racetrack_images/lane_3/image17.png"
 output = detect_lane_lines(filename)
 
 # print(output["lane_center"])
