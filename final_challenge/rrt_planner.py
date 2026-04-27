@@ -6,8 +6,10 @@ from .utils import LineTrajectory
 from rclpy.node import Node
 from rclpy.qos import QoSProfile, QoSDurabilityPolicy
 
+import time
 import numpy as np
 from scipy.ndimage import binary_dilation
+from scipy.spatial import KDTree
 
 
 class RRTNode:
@@ -90,6 +92,7 @@ class RRTStarPlanner(Node):
         self.plan_path(start, end, self.map)
 
     def plan_path(self, start_point, end_point, map_msg):
+        t0 = time.time()
         self.get_logger().info('Path planner called')
         q = map_msg.info.origin.orientation
         self.get_logger().info(f'Map origin orientation: x={q.x}, y={q.y}, z={q.z}, w={q.w}')
@@ -135,15 +138,17 @@ class RRTStarPlanner(Node):
         def dist(m, n): #distance begween two node positions
             return ((m[0]-n[0])**2+(m[1]-n[1])**2)**0.5
 
-        def connectible(m, n): #checks if there's a collision-free line between two node positions
-            N = max(abs(n[0]-m[0]), abs(n[1]-m[1])) #number of points to check
-            if N==0:
+        def connectible(m, n):
+            N = max(abs(n[0]-m[0]), abs(n[1]-m[1]))
+            if N == 0:
                 return True
-            for t in np.linspace(0, 1, N):
-                u, v = round(t*m[0]+(1-t)*n[0]), round(t*m[1]+(1-t)*n[1])
-                if not is_free(u, v):
-                    return False
-            return True
+            ts = np.linspace(0, 1, N)
+            us = np.round(ts*n[0] + (1-ts)*m[0]).astype(int)
+            vs = np.round(ts*n[1] + (1-ts)*m[1]).astype(int)
+            in_bounds = (us >= 0) & (vs >= 0) & (us < width) & (vs < height)
+            if not in_bounds.all():
+                return False
+            return not dilated[vs, us].any()
 
         start_px = world_to_pixel(*start_point)
         goal_px = world_to_pixel(*end_point)
@@ -162,31 +167,36 @@ class RRTStarPlanner(Node):
         # RRT*
         start_node = RRTNode(pos=start_px, parent=None, cost=0.0)
         tree = [start_node]
+        tree_positions = [list(start_px)]
         goal_node = None
+        kdtree = KDTree(tree_positions)
 
         for iter in range(self.max_iter):
-            sample = goal_px #with probability goal_bias, uniform random otherwise
+            sample = goal_px
             rand = np.random.random()
             if rand > self.goal_bias:
                 sample = (np.random.randint(0, width-1), np.random.randint(0, height-1))
                 if not is_free(sample[0], sample[1]):
                     continue
 
-            nearest_node = start_node
-            for node in tree:
-                if dist(node.pos, sample) < dist(nearest_node.pos, sample):
-                    nearest_node = node
+            if iter % 50 == 0:
+                kdtree = KDTree(tree_positions)
+            _, idx = kdtree.query(sample)
+            nearest_node = tree[idx]
+
             delta = (sample[0] - nearest_node.pos[0], sample[1] - nearest_node.pos[1])
-            #update to next position
             next_pos = sample
-            d_delta = dist(delta, [0,0])
+            d_delta = dist(delta, [0, 0])
             if d_delta > self.step_size:
-                next_pos = (round(nearest_node.pos[0] + (delta[0] / d_delta) * self.step_size), round(nearest_node.pos[1] + (delta[1] / d_delta) * self.step_size))
+                next_pos = (round(nearest_node.pos[0] + (delta[0] / d_delta) * self.step_size),
+                            round(nearest_node.pos[1] + (delta[1] / d_delta) * self.step_size))
             if not is_free(*next_pos) or not connectible(nearest_node.pos, next_pos):
                 continue
-            #construct neighbors (for the rewiring step)
-            neighbors = [node for node in tree if dist(node.pos, next_pos) < self.rewire_radius and connectible(node.pos, next_pos)]
-            #find best parent/cost among neighbors
+
+            neighbor_indices = kdtree.query_ball_point(next_pos, self.rewire_radius)
+            neighbors = [tree[i] for i in neighbor_indices
+                         if connectible(tree[i].pos, next_pos)]
+
             best_parent = nearest_node
             best_cost = nearest_node.cost + dist(nearest_node.pos, next_pos)
             for node in neighbors:
@@ -194,23 +204,23 @@ class RRTStarPlanner(Node):
                 if cost < best_cost:
                     best_parent = node
                     best_cost = cost
+
             next_node = RRTNode(pos=next_pos, parent=best_parent, cost=best_cost)
             tree.append(next_node)
+            tree_positions.append(list(next_pos))
 
-            #rewiring step
             for node in neighbors:
                 new_cost = next_node.cost + dist(next_pos, node.pos)
                 if new_cost < node.cost:
                     node.parent = next_node
                     node.cost = new_cost
 
-            #check if reached goal
             if dist(next_pos, goal_px) < self.goal_tol and connectible(next_pos, goal_px):
-                goal_cost = next_node.cost+dist(next_pos,goal_px)
+                goal_cost = next_node.cost + dist(next_pos, goal_px)
                 if goal_node is None or goal_node.cost > goal_cost:
                     goal_node = RRTNode(pos=goal_px, parent=next_node, cost=goal_cost)
-                tree.append(goal_node)
-                #keep running bc iterations still have room for improvement
+                    tree.append(goal_node)
+                break
 
         self.get_logger().info(f'Tree size after {self.max_iter} iterations: {len(tree)}')
 
@@ -233,6 +243,7 @@ class RRTStarPlanner(Node):
         self.traj_pub.publish(self.trajectory.toPoseArray())
         self.trajectory.publish_viz()
         self.trajectory.clear()
+        self.get_logger().info(f'Planning took {time.time() - t0:.2f}s, path has {len(path)} waypoints')
 
 
 def main(args=None):
