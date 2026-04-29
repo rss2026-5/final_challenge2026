@@ -24,7 +24,7 @@ def image_print(img):
     cv2.destroyAllWindows()
 
 
-def detect_lane_lines(img):
+def detect_lane_lines(img, lookahead_ratio=1.0):
     """
     Detect left and right lane lines in an image using color-based segmentation.
 
@@ -140,8 +140,8 @@ def detect_lane_lines(img):
         if abs(vy) < 1e-6:
             return None
         return int(x0 + (y - y0) * vx / vy)
-
-    y_eval = img_h
+    
+    y_eval = int(img_h * lookahead_ratio)
     left_x = get_x_at_y(left_line, y_eval)
     right_x = get_x_at_y(right_line, y_eval)
 
@@ -149,9 +149,9 @@ def detect_lane_lines(img):
     if left_x is not None and right_x is not None:
         lane_center = (left_x + right_x) // 2
     elif left_x is not None:
-        lane_center = left_x + 300 // 2
+        lane_center = left_x + 100
     elif right_x is not None:
-        lane_center = right_x - 300 // 2
+        lane_center = right_x - 100
 
     # --- Visualization ---
     output_img = img_bgr.copy()
@@ -168,9 +168,9 @@ def detect_lane_lines(img):
     draw_line(output_img, left_line, (255, 0, 0))
     draw_line(output_img, right_line, (0, 0, 255))
     if lane_center is not None:
-        cv2.line(output_img, (lane_center, img_h), (lane_center, int(img_h*0.5)), (0,255,255), 2)
+        cv2.circle(output_img, (lane_center, y_eval), 6, (0,255,255), -1)
 
-    image_print(output_img)
+    # # image_print(output_img)
 
     return {
         "left_line": left_line,
@@ -179,7 +179,7 @@ def detect_lane_lines(img):
         "image": output_img
     }
 
-filename = "./racetrack_images/lane_3/image17.png"
-output = detect_lane_lines(filename)
+filename = "./racetrack_images/lane_3/image69.png"
+output = detect_lane_lines(filename, 0.6)
 
 # print(output["lane_center"])
