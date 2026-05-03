@@ -39,11 +39,9 @@ class OverallController(Node):
         #[x, y, yaw] waypoints as intermediate steps to hardcode long loop back.
         #appended to the queue after the last PARK completes.
         self.declare_parameter("return_waypoints", [0.0])
-        # Wait this long after launch before accepting goals, so the particle
-        # filter has time to converge on a stable pose.
+        #Small wait time to let particle filter converge, so initial pose is stable
         self.declare_parameter("startup_delay_sec", 5.0)
-        # If true, snapshot the localized pose at end of startup_delay and
-        # append it as a PASS waypoint after all PARK goals (to return home).
+        #Saves initial pose (after delay) as position to ultimately return to
         self.declare_parameter("auto_return_to_start", True)
 
         odom_topic = self.get_parameter("odom_topic").value
@@ -90,8 +88,7 @@ class OverallController(Node):
         # 20Hz control loop
         self.control_timer = self.create_timer(0.05, self.control_loop)
 
-        # One-shot startup timer: gives the particle filter time to converge
-        # before we snapshot the start pose and start accepting goals.
+        #Startup timer for particle filter
         self._startup_timer = self.create_timer(
             self.startup_delay_sec, self._on_startup_complete
         )
@@ -107,7 +104,7 @@ class OverallController(Node):
             return
 
         if not self._localization_ready:
-            # Stash so we can process as soon as the startup delay elapses.
+            #Process upon localization warmup's conclusion
             self._pending_goals = msg
             self.get_logger().info(
                 "Goals received before localization warmup finished; deferring."
@@ -205,7 +202,7 @@ class OverallController(Node):
             self.get_logger().info("All goals visited. Challenge complete.")
 
     def _on_startup_complete(self):
-        """Fires once after startup_delay_sec. Snapshots start pose and flushes goals."""
+        """One-time after startup_delay_sec. Snapshots start pose and processes goals."""
         self._startup_timer.cancel()
         self._startup_timer = None
         self._localization_ready = True
@@ -252,7 +249,7 @@ class OverallController(Node):
         #checks/adds final leg to return to starting position
         if not self._return_leg_appended and self.current_goal_index >= len(self.goal_queue):
             return_pts = list(self.return_waypoints)
-            # Auto-append the snapshotted start pose as the final return target.
+            # snapshotted start pose as the final return target.
             if self.auto_return_to_start and self.start_pose is not None:
                 return_pts.append(self.start_pose)
             if return_pts:
