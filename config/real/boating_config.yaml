@@ -20,6 +20,13 @@ overall_controller:
     goal_arrival_threshold: 1.0
     parking_duration: 5.0
     detection_window: 3.0
+    startup_delay_sec: 5.0
+    auto_return_to_start: true
+    #[x, y, yaw, ...] waypoints, followed by saved start pose
+    return_waypoints: [
+      -53.0,   34.0,    0.0,    #up west-side hallway
+      -54.76,  -0.51,   0.0,    #around the bottom corner
+    ]
 
 object_detector:
   ros__parameters:
