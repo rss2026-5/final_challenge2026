@@ -39,6 +39,12 @@ class OverallController(Node):
         #[x, y, yaw] waypoints as intermediate steps to hardcode long loop back.
         #appended to the queue after the last PARK completes.
         self.declare_parameter("return_waypoints", [0.0])
+        # Wait this long after launch before accepting goals, so the particle
+        # filter has time to converge on a stable pose.
+        self.declare_parameter("startup_delay_sec", 5.0)
+        # If true, snapshot the localized pose at end of startup_delay and
+        # append it as a PASS waypoint after all PARK goals (to return home).
+        self.declare_parameter("auto_return_to_start", True)
 
         odom_topic = self.get_parameter("odom_topic").value
         drive_topic = self.get_parameter("drive_topic").value
@@ -49,7 +55,12 @@ class OverallController(Node):
         self.return_waypoints = self._parse_waypoints(
             list(self.get_parameter("return_waypoints").value)
         )
+        self.startup_delay_sec = float(self.get_parameter("startup_delay_sec").value)
+        self.auto_return_to_start = bool(self.get_parameter("auto_return_to_start").value)
         self._return_leg_appended = False
+        self._localization_ready = False
+        self._pending_goals = None
+        self.start_pose = None
 
         # State
         self.state = State.IDLE
@@ -79,13 +90,33 @@ class OverallController(Node):
         # 20Hz control loop
         self.control_timer = self.create_timer(0.05, self.control_loop)
 
-        self.get_logger().info("OverallController initialized, waiting for goals...")
+        # One-shot startup timer: gives the particle filter time to converge
+        # before we snapshot the start pose and start accepting goals.
+        self._startup_timer = self.create_timer(
+            self.startup_delay_sec, self._on_startup_complete
+        )
+
+        self.get_logger().info(
+            f"OverallController initialized; waiting {self.startup_delay_sec:.1f}s "
+            "for localization before accepting goals..."
+        )
 
     def goals_cb(self, msg: PoseArray):
         """Receive goal sequence from course staff. Only processed once in IDLE."""
         if self.state != State.IDLE:
             return
 
+        if not self._localization_ready:
+            # Stash so we can process as soon as the startup delay elapses.
+            self._pending_goals = msg
+            self.get_logger().info(
+                "Goals received before localization warmup finished; deferring."
+            )
+            return
+
+        self._ingest_goals(msg)
+
+    def _ingest_goals(self, msg: PoseArray):
         self.goal_queue = []
         for pose in msg.poses:
             goal = PoseStamped()
@@ -173,6 +204,30 @@ class OverallController(Node):
         elif new_state == State.DONE:
             self.get_logger().info("All goals visited. Challenge complete.")
 
+    def _on_startup_complete(self):
+        """Fires once after startup_delay_sec. Snapshots start pose and flushes goals."""
+        self._startup_timer.cancel()
+        self._startup_timer = None
+        self._localization_ready = True
+
+        if self.current_pose is not None:
+            self.start_pose = self.current_pose
+            self.get_logger().info(
+                f"Localization warmup complete. Start pose snapshot: "
+                f"({self.start_pose[0]:.2f}, {self.start_pose[1]:.2f}, "
+                f"yaw={self.start_pose[2]:.2f})"
+            )
+        else:
+            self.get_logger().warn(
+                "Localization warmup elapsed but no odom received yet — "
+                "auto return-to-start will not be available."
+            )
+
+        if self._pending_goals is not None:
+            pending = self._pending_goals
+            self._pending_goals = None
+            self._ingest_goals(pending)
+
     def _detection_timeout_cb(self):
         """Detection window expired without finding a parking meter."""
         self.detection_timer.cancel()
@@ -195,20 +250,26 @@ class OverallController(Node):
         self.current_goal_index += 1
 
         #checks/adds final leg to return to starting position
-        if not self._return_leg_appended and self.current_goal_index >= len(self.goal_queue) and self.return_waypoints:
-            self._return_leg_appended = True
-            for (x, y, yaw) in self.return_waypoints:
-                pose = PoseStamped()
-                pose.header.frame_id = "map"
-                pose.pose.position.x = float(x)
-                pose.pose.position.y = float(y)
-                half = float(yaw) * 0.5
-                pose.pose.orientation.z = math.sin(half)
-                pose.pose.orientation.w = math.cos(half)
-                self.goal_queue.append((pose, GoalType.PASS))
-            self.get_logger().info(
-                f"Appended {len(self.return_waypoints)} return waypoints"
-            )
+        if not self._return_leg_appended and self.current_goal_index >= len(self.goal_queue):
+            return_pts = list(self.return_waypoints)
+            # Auto-append the snapshotted start pose as the final return target.
+            if self.auto_return_to_start and self.start_pose is not None:
+                return_pts.append(self.start_pose)
+            if return_pts:
+                self._return_leg_appended = True
+                for (x, y, yaw) in return_pts:
+                    pose = PoseStamped()
+                    pose.header.frame_id = "map"
+                    pose.pose.position.x = float(x)
+                    pose.pose.position.y = float(y)
+                    half = float(yaw) * 0.5
+                    pose.pose.orientation.z = math.sin(half)
+                    pose.pose.orientation.w = math.cos(half)
+                    self.goal_queue.append((pose, GoalType.PASS))
+                self.get_logger().info(
+                    f"Appended {len(return_pts)} return waypoint(s) "
+                    f"(auto_return_to_start={self.auto_return_to_start})"
+                )
         if self.current_goal_index < len(self.goal_queue):
             self._publish_current_goal()
             self._transition_to(State.NAVIGATING)
