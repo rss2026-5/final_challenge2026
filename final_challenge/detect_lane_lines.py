@@ -41,7 +41,7 @@ def detect_lane_lines(img, lookahead_ratio=1.0):
         5. Filter contours based on size/shape
         6. Separate contours into left/right lanes
         7. Fit a line to each lane using cv2.fitLine
-        8. Estimate lane center and steering error
+        8. Estimate lane center
 
     Args:
         img (np.ndarray or str):
@@ -179,7 +179,7 @@ def detect_lane_lines(img, lookahead_ratio=1.0):
         "image": output_img
     }
 
-filename = "./racetrack_images/lane_3/image69.png"
-output = detect_lane_lines(filename, 0.6)
+# filename = "./racetrack_images/lane_3/image69.png"
+# output = detect_lane_lines(filename, 0.55)
 
 # print(output["lane_center"])

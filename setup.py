@@ -36,6 +36,7 @@ setup(
             # Part A: The Great Snail Race
             'lane_detector = final_challenge.lane_detector:main',
             'lane_follower = final_challenge.lane_follower:main',
+            'lane_evaluator = final_challenge.lane_evaluator:main',
             'race_safety_controller = final_challenge.race_safety_controller:main',
             # Part B: Mrs. Puff's Boating School
             'overall_controller = final_challenge.overall_controller:main',

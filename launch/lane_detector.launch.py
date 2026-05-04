@@ -33,6 +33,13 @@ def generate_launch_description():
             ]
         ),
 
+        Node(
+            package="final_challenge",
+            executable="lane_evaluator",
+            name="evaluator",
+            output="screen"
+        ),
+
         # --- Rosbag playback ---
         ExecuteProcess(
             cmd=[
@@ -43,4 +50,11 @@ def generate_launch_description():
             ],
             output="screen"
         ),
+
+        # ExecuteProcess(
+        #     cmd=[
+        #         "ros2", "topic", "echo", "--csv", "/lane_error", ">", "lane_eval_results.csv"
+        #     ],
+        #     shell=True
+        # ),
     ])
