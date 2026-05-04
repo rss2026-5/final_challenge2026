@@ -30,8 +30,18 @@ overall_controller:
 
 object_detector:
   ros__parameters:
-    camera_topic: "/zed/rgb/image_rect_color"
+    camera_topic: "/zed/zed_node/rgb/image_rect_color"
+    # Lowered from 0.5: parking meters are flat cardboard cutouts at floor
+    # level, so YOLO's confidence is lower than for the 3D meters in COCO
+    # training. Persistence bumped to 4 to suppress the resulting false
+    # positives.
+    conf_threshold: 0.3
+    persistence_frames: 4
 
 traffic_light_detector:
   ros__parameters:
-    camera_topic: "/zed/rgb/image_rect_color"
+    camera_topic: "/zed/zed_node/rgb/image_rect_color"
+    # Light is mounted on a short pedestal (~30cm), so from the car it
+    # appears in the lower-middle of the frame, not the upper.
+    roi_top_fraction: 0.3
+    roi_bottom_fraction: 0.9

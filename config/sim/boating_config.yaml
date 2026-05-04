@@ -33,11 +33,15 @@ overall_controller:
 
 object_detector:
   ros__parameters:
-    camera_topic: "/zed/rgb/image_rect_color"
+    camera_topic: "/zed/zed_node/rgb/image_rect_color"
+    conf_threshold: 0.3
+    persistence_frames: 4
 
 traffic_light_detector:
   ros__parameters:
-    camera_topic: "/zed/rgb/image_rect_color"
+    camera_topic: "/zed/zed_node/rgb/image_rect_color"
+    roi_top_fraction: 0.3
+    roi_bottom_fraction: 0.9
 
 # --- Part B sim harness ---
 # Coordinates below are placeholders calibrated roughly from
