@@ -27,7 +27,7 @@ class LaneFollower(Node):
         self.relative_y = 0
 
         self.speed = 4.0 # hardcoded max speed
-        self.acceptable_distance_error = self.speed * 0.08 # can change this
+        self.acceptable_distance_error = self.speed * 0.01 # can change this
         self.acceptable_angle_error = 0.05 # can change this
         self.max_angle = 0.4 # can change this
         self.previous_steering_angle = None
