@@ -8,7 +8,10 @@ from geometry_msgs.msg import PoseArray, Pose, PoseStamped
 from nav_msgs.msg import Odometry
 from std_msgs.msg import Bool, String
 from ackermann_msgs.msg import AckermannDriveStamped
-import tf_transformations
+
+
+def yaw_from_quaternion(x: float, y: float, z: float, w: float) -> float:
+    return math.atan2(2.0 * (w * z + x * y), 1.0 - 2.0 * (y * y + z * z))
 
 
 class State(Enum):
@@ -134,8 +137,7 @@ class OverallController(Node):
         """Update current pose. Check goal arrival when NAVIGATING."""
         pos = msg.pose.pose.position
         quat = msg.pose.pose.orientation
-        _, _, yaw = tf_transformations.euler_from_quaternion(
-            [quat.x, quat.y, quat.z, quat.w])
+        yaw = yaw_from_quaternion(quat.x, quat.y, quat.z, quat.w)
         self.current_pose = (pos.x, pos.y, yaw)
 
         if self.state == State.NAVIGATING:
