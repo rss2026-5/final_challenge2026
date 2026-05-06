@@ -8,6 +8,7 @@ from geometry_msgs.msg import PoseArray, Pose, PoseStamped
 from nav_msgs.msg import Odometry
 from std_msgs.msg import Bool, String
 from ackermann_msgs.msg import AckermannDriveStamped
+from rclpy.qos import QoSProfile, QoSDurabilityPolicy
 
 
 def yaw_from_quaternion(x: float, y: float, z: float, w: float) -> float:
@@ -75,8 +76,11 @@ class OverallController(Node):
         self.parking_timer = None
 
         # Subscribers
+        # /exploring_challenge uses TRANSIENT_LOCAL in case basement point publisher predates our node
+        latched_qos = QoSProfile(
+            depth=1, durability=QoSDurabilityPolicy.TRANSIENT_LOCAL)
         self.goals_sub = self.create_subscription(
-            PoseArray, "/exploring_challenge", self.goals_cb, 10)
+            PoseArray, "/exploring_challenge", self.goals_cb, latched_qos)
         self.odom_sub = self.create_subscription(
             Odometry, odom_topic, self.odom_cb, 10)
         self.detection_sub = self.create_subscription(
