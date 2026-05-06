@@ -87,6 +87,7 @@ class ParkingApproach(Node):
         self.complete_published = False
         self.last_position = None  # (x, y, ros_time) in base_link
         self.in_window_since = None  # ros_time first entered tolerance band
+        self._tick = 0  # control-loop tick counter, used to throttle debug logs
 
         self.drive_pub = self.create_publisher(
             AckermannDriveStamped, self.drive_topic, 10)
@@ -125,12 +126,24 @@ class ParkingApproach(Node):
         self.last_position = (x, y, self.get_clock().now())
 
     def control_loop(self):
+        self._tick += 1
+        # 1Hz heartbeat so it's obvious from logs what the controller is
+        # seeing on every loop iteration.
+        log_this_tick = (self._tick % 20 == 0)
+
         if not self.active:
+            if log_this_tick:
+                self.get_logger().info("[heartbeat] active=False, idle")
             return
         if self.complete_published:
-            # Done with this meter — FSM is in PARKING / dwell. Don't fight it.
+            if log_this_tick:
+                self.get_logger().info("[heartbeat] complete=True, idle")
             return
         if self.last_position is None:
+            if log_this_tick:
+                self.get_logger().info(
+                    "[heartbeat] active=True but no position seen yet"
+                )
             return
 
         x, y, ts = self.last_position
@@ -140,6 +153,10 @@ class ParkingApproach(Node):
             # the whole detection window, the FSM's timeout will fire.
             self._publish_drive(0.0, 0.0)
             self.in_window_since = None
+            if log_this_tick:
+                self.get_logger().info(
+                    f"[heartbeat] position stale (age={age:.2f}s), publishing stop"
+                )
             return
 
         distance = math.hypot(x, y)
@@ -153,9 +170,17 @@ class ParkingApproach(Node):
             if self.in_window_since is None:
                 self.in_window_since = now
                 self._publish_drive(0.0, 0.0)
+                if log_this_tick:
+                    self.get_logger().info(
+                        f"[heartbeat] in tolerance band (d={distance:.2f}m), starting dwell"
+                    )
                 return
             held = (now - self.in_window_since).nanoseconds * 1e-9
             self._publish_drive(0.0, 0.0)
+            if log_this_tick:
+                self.get_logger().info(
+                    f"[heartbeat] holding (d={distance:.2f}m, held={held:.2f}/{self.stop_hold_sec}s)"
+                )
             if held >= self.stop_hold_sec:
                 self._publish_complete()
             return
@@ -192,6 +217,11 @@ class ParkingApproach(Node):
         )
 
         self._publish_drive(speed, steer)
+        if log_this_tick:
+            self.get_logger().info(
+                f"[heartbeat] driving d={distance:.2f}m err={error:+.2f}m "
+                f"speed={speed:+.2f}m/s steer={steer:+.2f}rad"
+            )
 
     def _publish_drive(self, speed, steer):
         msg = AckermannDriveStamped()
