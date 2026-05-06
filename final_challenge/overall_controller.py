@@ -87,6 +87,12 @@ class OverallController(Node):
             String, "/object_detection", self.object_detection_cb, 10)
         self.traffic_sub = self.create_subscription(
             Bool, "/traffic_light/state", self.traffic_light_cb, 10)
+        # parking_approach drives the last ~1m using the meter's homography
+        # position. It signals here when the car is parked correctly and
+        # ready for the 5s dwell.
+        self.approach_sub = self.create_subscription(
+            Bool, "/parking_approach/complete",
+            self.approach_complete_cb, 10)
 
         # Publishers
         self.goal_pub = self.create_publisher(PoseStamped, "/goal_pose", 10)
@@ -168,22 +174,39 @@ class OverallController(Node):
             return
 
         if "parking_meter" in msg.data.lower():
-            self.get_logger().info("Parking meter detected!")
+            self.get_logger().info(
+                "Parking meter detected — handing off to parking_approach"
+            )
             self.meter_detected = True
-            if self.detection_timer is not None:
-                self.detection_timer.cancel()
-                self.detection_timer = None
-            self._transition_to(State.PARKING)
+            # Don't transition to PARKING yet; parking_approach will drive
+            # the last ~1m and tell us via /parking_approach/complete.
+
+    def approach_complete_cb(self, msg: Bool):
+        """parking_approach has the car within stop_distance — start dwell."""
+        if self.state != State.DETECTING or not msg.data:
+            return
+        self.get_logger().info(
+            "Parking approach complete — starting 5s dwell"
+        )
+        if self.detection_timer is not None:
+            self.detection_timer.cancel()
+            self.detection_timer = None
+        self._transition_to(State.PARKING)
 
     def traffic_light_cb(self, msg: Bool):
         """Update red light flag. The control_loop handles stopping."""
         self.red_light_detected = msg.data
 
     def control_loop(self):
-        """Runs at 20Hz. Publishes stop commands when the car should be stationary."""
+        """Runs at 20Hz. Publishes stop commands when the car should be stationary.
+
+        Note: in DETECTING, parking_approach owns the drive topic — we
+        deliberately don't publish stop here, otherwise we'd fight it on
+        the same topic at 20 Hz. PARKING/DONE we still own.
+        """
         if self.state == State.NAVIGATING and self.red_light_detected:
             self._publish_stop()
-        elif self.state in (State.DETECTING, State.PARKING, State.DONE):
+        elif self.state in (State.PARKING, State.DONE):
             self._publish_stop()
 
     def _transition_to(self, new_state: State):

@@ -42,6 +42,7 @@ setup(
             'overall_controller = final_challenge.overall_controller:main',
             'object_detector = final_challenge.object_detector:main',
             'traffic_light_detector = final_challenge.traffic_light_detector:main',
+            'parking_approach = final_challenge.parking_approach:main',
             # Part B sim harness
             'initial_pose_publisher = final_challenge.initial_pose_publisher:main',
             'basement_point_publisher = final_challenge.basement_point_publisher:main',

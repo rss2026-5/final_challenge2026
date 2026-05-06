@@ -45,3 +45,16 @@ traffic_light_detector:
     # appears in the lower-middle of the frame, not the upper.
     roi_top_fraction: 0.3
     roi_bottom_fraction: 0.9
+
+# Drives the last ~1m to the meter. The TA-published goal pose has
+# hand-placement error, so we close the loop on the actual meter
+# position (homography-projected from object_detector).
+parking_approach:
+  ros__parameters:
+    drive_topic: "/vesc/input/navigation"
+    stop_distance: 1.0
+    stop_tolerance: 0.15
+    stop_hold_sec: 0.4
+    max_speed: 0.7
+    min_speed: 0.25
+    slow_distance: 1.8

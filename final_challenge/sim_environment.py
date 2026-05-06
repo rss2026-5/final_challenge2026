@@ -28,6 +28,11 @@ class SimEnvironment(Node):
         self.declare_parameter("odom_topic", "/odom")
         self.declare_parameter("object_detection_topic", "/object_detection")
         self.declare_parameter("traffic_light_topic", "/traffic_light/state")
+        self.declare_parameter("approach_complete_topic", "/parking_approach/complete")
+        # Delay between fake meter detection and fake approach-complete, so
+        # the FSM's NAVIGATING -> DETECTING -> PARKING transitions are
+        # observable in logs/rviz before we jump to the dwell.
+        self.declare_parameter("approach_complete_delay_sec", 1.0)
 
         # Flat [x1, y1, x2, y2, ...]; must match goals in basement_point_publisher.
         self.declare_parameter("goal_points", [0.0, 0.0, 0.0, 0.0])
@@ -48,6 +53,9 @@ class SimEnvironment(Node):
         odom_topic = self.get_parameter("odom_topic").value
         obj_topic = self.get_parameter("object_detection_topic").value
         tl_topic = self.get_parameter("traffic_light_topic").value
+        ac_topic = self.get_parameter("approach_complete_topic").value
+        self.approach_complete_delay = float(
+            self.get_parameter("approach_complete_delay_sec").value)
 
         gp = list(self.get_parameter("goal_points").value)
         self.goals = [(gp[i], gp[i + 1]) for i in range(0, len(gp), 2)]
@@ -74,6 +82,9 @@ class SimEnvironment(Node):
             )
 
         self.obj_pub = self.create_publisher(String, obj_topic, 10)
+        # Fake parking_approach output so the FSM's new approach-complete
+        # path also works in sim (no real perception/approach controller).
+        self.approach_pub = self.create_publisher(Bool, ac_topic, 10)
         # Only create a traffic-light publisher if this node will actually
         # drive the light (startup or proximity). Otherwise we leave the
         # topic entirely to external publishers (e.g. manual ros2 topic pub,
@@ -126,6 +137,12 @@ class SimEnvironment(Node):
                     out = String()
                     out.data = "parking_meter"
                     self.obj_pub.publish(out)
+                    # Fake the approach-complete signal after a short delay
+                    # so the FSM advances DETECTING -> PARKING.
+                    self.create_timer(
+                        self.approach_complete_delay,
+                        self._fake_approach_complete,
+                    )
                 else:
                     self.get_logger().info(
                         f"Sim: skipping detection at goal {i} (probability roll)"
@@ -141,6 +158,14 @@ class SimEnvironment(Node):
                 msg_out.data = True
                 self.tl_pub.publish(msg_out)
                 self._tl_timer = self.create_timer(self.red_duration, self._clear_red)
+
+    def _fake_approach_complete(self):
+        # FSM only acts on this in DETECTING; once it transitions to
+        # PARKING it ignores further messages, so re-firing is harmless.
+        msg = Bool()
+        msg.data = True
+        self.approach_pub.publish(msg)
+        self.get_logger().info("Sim: faking parking_approach/complete=True")
 
     def _clear_red(self):
         self._tl_timer.cancel()

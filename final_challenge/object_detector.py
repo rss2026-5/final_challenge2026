@@ -17,6 +17,7 @@ import rclpy
 import torch
 from ackermann_msgs.msg import AckermannDriveStamped
 from cv_bridge import CvBridge
+from geometry_msgs.msg import PointStamped
 from rclpy.node import Node
 from sensor_msgs.msg import Image
 from std_msgs.msg import String
@@ -49,6 +50,7 @@ class ObjectDetector(Node):
 
         self.declare_parameter("camera_topic", "/zed/rgb/image_rect_color")
         self.declare_parameter("detection_topic", "/object_detection")
+        self.declare_parameter("position_topic", "/parking_meter/relative_position")
         self.declare_parameter("debug_image_topic", "/object_detector/debug_image")
         self.declare_parameter("model", "yolo11n.pt")
         self.declare_parameter("conf_threshold", 0.5)
@@ -61,6 +63,7 @@ class ObjectDetector(Node):
 
         self.camera_topic = self.get_parameter("camera_topic").value
         self.detection_topic = self.get_parameter("detection_topic").value
+        self.position_topic = self.get_parameter("position_topic").value
         self.debug_topic = self.get_parameter("debug_image_topic").value
         self.model_name = self.get_parameter("model").value
         self.conf_threshold = float(self.get_parameter("conf_threshold").value)
@@ -97,6 +100,7 @@ class ObjectDetector(Node):
         self.detection_count = 0
 
         self.det_pub = self.create_publisher(String, self.detection_topic, 10)
+        self.pos_pub = self.create_publisher(PointStamped, self.position_topic, 10)
         self.debug_pub = self.create_publisher(Image, self.debug_topic, 10)
         self.image_sub = self.create_subscription(
             Image, self.camera_topic, self.on_image, 1
@@ -141,6 +145,14 @@ class ObjectDetector(Node):
 
         annotated = self._draw_overlay(frame, candidates, chosen)
         self._publish_debug(annotated, msg.header)
+
+        # Publish the chosen meter's ground position every frame it's
+        # visible. parking_approach uses this to drive the car the last
+        # ~1m. Independent of the persistence/cooldown gating used for the
+        # /object_detection String trigger — those govern when the FSM
+        # *transitions*, this governs how the FSM *parks*.
+        if chosen is not None:
+            self._publish_position(chosen, msg.header)
 
         if chosen is None:
             self.consecutive_hits = 0
@@ -258,6 +270,15 @@ class ObjectDetector(Node):
                 cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 0), 2,
             )
         return out
+
+    def _publish_position(self, chosen, header):
+        msg = PointStamped()
+        msg.header = header
+        msg.header.frame_id = "base_link"
+        msg.point.x = float(chosen["ground"][0])
+        msg.point.y = float(chosen["ground"][1])
+        msg.point.z = 0.0
+        self.pos_pub.publish(msg)
 
     def _publish_debug(self, image, header):
         try:

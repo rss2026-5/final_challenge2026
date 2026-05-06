@@ -28,6 +28,11 @@
         <param from="$(find-pkg-share final_challenge)/config/real/boating_config.yaml"/>
     </node>
 
+    <!-- Drives the last ~1m to the meter using its homography position. -->
+    <node pkg="final_challenge" exec="parking_approach" name="parking_approach" output="screen">
+        <param from="$(find-pkg-share final_challenge)/config/real/boating_config.yaml"/>
+    </node>
+
     <!-- Overall controller -->
     <node pkg="final_challenge" exec="overall_controller" name="overall_controller" output="screen">
         <param from="$(find-pkg-share final_challenge)/config/real/boating_config.yaml"/>

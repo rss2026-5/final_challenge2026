@@ -51,6 +51,12 @@
           if="$(var use_real_detectors)">
         <param from="$(find-pkg-share final_challenge)/config/sim/boating_config.yaml"/>
     </node>
+    <!-- parking_approach drives the last ~1m to the meter. In sim with
+         use_real_detectors=false, sim_environment fakes its complete signal. -->
+    <node pkg="final_challenge" exec="parking_approach" name="parking_approach" output="screen"
+          if="$(var use_real_detectors)">
+        <param from="$(find-pkg-share final_challenge)/config/sim/boating_config.yaml"/>
+    </node>
 
     <!-- Overall controller -->
     <node pkg="final_challenge" exec="overall_controller" name="overall_controller" output="screen">

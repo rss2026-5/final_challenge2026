@@ -43,6 +43,16 @@ traffic_light_detector:
     roi_top_fraction: 0.3
     roi_bottom_fraction: 0.9
 
+parking_approach:
+  ros__parameters:
+    drive_topic: "/drive"
+    stop_distance: 1.0
+    stop_tolerance: 0.15
+    stop_hold_sec: 0.4
+    max_speed: 0.7
+    min_speed: 0.25
+    slow_distance: 1.8
+
 # --- Part B sim harness ---
 # Coordinates below are placeholders calibrated roughly from
 # media/final_challenge_bikini_bottom.png (stata_basement.yaml origin =
