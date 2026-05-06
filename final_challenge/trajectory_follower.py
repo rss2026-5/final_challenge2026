@@ -28,7 +28,7 @@ class PurePursuit(Node):
         self.max_steer = 0.34         # max steering angle [rad] (~19.5 deg)
 
         # Stop when this close to the final waypoint
-        self.goal_tolerance = 0.5  # [m]
+        self.goal_tolerance = 0.8  # [m]
 
         self.initialized_traj = False
         self.trajectory = LineTrajectory(self, "/followed_trajectory")

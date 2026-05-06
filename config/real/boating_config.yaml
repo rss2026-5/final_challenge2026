@@ -17,7 +17,7 @@ overall_controller:
   ros__parameters:
     odom_topic: "/pf/pose/odom"
     drive_topic: "/vesc/input/navigation"
-    goal_arrival_threshold: 1.0
+    goal_arrival_threshold: 0.8
     parking_duration: 5.0
     detection_window: 3.0
     startup_delay_sec: 5.0
