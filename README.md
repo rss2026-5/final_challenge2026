@@ -141,13 +141,13 @@ You will receive 3 points for each location you successfully reach. At each loca
 
 `penalties =  min(0.5 * violations, 3) + 1 * manual_assist`
 
-`detections` is the number of times you violate a traffic law. There are a couple ways that can happen:
+`violations` is the number of times you violate a traffic law. There are a couple ways that can happen:
 
 Pedestrian Crosswalk: The good citizens of Bikini Bottom are going about their day, and often need to cross the street (TAs walking back and forth)! You’ll need to navigate through the city without hitting any pedestrians; otherwise, your boating test might be in trouble.
 
 Traffic Light: Running a red light will scare Mrs. Puff, and might cause her to puff up, which could hurt your chances of successfully attaining a boating license!
 
-The maximum penalty you can recieve for detections is 3 points.
+The maximum penalty you can recieve for violations is 3 points.
 
 The `manual_assist` is the number of maneuvers (counted individually for turning a corner, stopping before a light, resetting a car, etc.) that required manual teleop intervention. 1 point will be docked for each assist.
 
