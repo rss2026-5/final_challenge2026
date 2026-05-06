@@ -103,7 +103,7 @@ Please note that Hough Transforms will very likely be useful; helpful resources 
 
 <img src="media/boating_school.png" width="400"/>
 
-Part B is worth 25% of your Final Challenge technical grade. You get 3 attempts and your grade is based on your best attempt out of 3. Your grade will be calculated based on completion of the course and the number of penalties you incur as follows. 
+Part B is worth 25% of your Final Challenge technical grade. You get 2 attempts and your grade is based on your best attempt out of 2. Your grade will be calculated based on completion of the course and the number of penalties you incur as follows. 
 
 `Part B grade = boating_test_score - penalties`
 
@@ -139,7 +139,7 @@ You will receive 3 points for each location you successfully reach. At each loca
 
 **Formula for Penalties:**
 
-`penalties =  min(0.5 * violations, 3) + 1 * manual_assist`
+`penalties =  min(0.5 * violations, 3) + 1 * manual_assist + 0.5 * max(time (s) - 180, 0)/10`
 
 `violations` is the number of times you violate a traffic law. There are a couple ways that can happen:
 
