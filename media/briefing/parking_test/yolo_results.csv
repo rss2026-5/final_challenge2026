@@ -1,0 +1,7 @@
+range_label,class,conf,aspect,passes_conf_0.5,passes_aspect,bbox_x1,bbox_y1,bbox_x2,bbox_y2,is_chosen
+1m,fire hydrant,0.9337,1.863,True,True,1070,1729,1795,3078,False
+1m,parking meter,0.6958,2.43,True,True,2215,1719,2657,2793,True
+1m,parking meter,0.3636,1.4,False,False,2215,1720,2660,2343,False
+2m,fire hydrant,0.9316,1.992,True,True,2599,1462,3194,2646,False
+2m,parking meter,0.4597,1.245,False,False,555,1777,988,2316,False
+2m,parking meter,0.3506,2.066,False,True,555,1780,1006,2712,False
