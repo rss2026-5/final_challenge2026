@@ -5,6 +5,8 @@
         <param from="$(find-pkg-share final_challenge)/config/real/race_config.yaml"/>
     </node>
 
+    <node pkg="final_challenge" exec="homography_transformer" name="homography_transformer" output="screen"/>
+
     <node pkg="final_challenge" exec="lane_follower" name="lane_follower" output="screen">
         <param from="$(find-pkg-share final_challenge)/config/real/race_config.yaml"/>
     </node>

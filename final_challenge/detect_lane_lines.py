@@ -176,7 +176,8 @@ def detect_lane_lines(img, lookahead_ratio=1.0):
         "left_line": left_line,
         "right_line": right_line,
         "lane_center": lane_center,
-        "image": output_img
+        "image": output_img,
+        "color_mask": mask_clean
     }
 
 # filename = "./racetrack_images/lane_3/image69.png"

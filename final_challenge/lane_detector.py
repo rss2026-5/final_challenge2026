@@ -31,7 +31,7 @@ class LaneDetector(Node):
         # --- Subscribers ---
         self.sub = self.create_subscription(
             Image,
-            "/image_raw",
+            "/zed/zed_node/rgb/image_rect_color",
             self.image_callback,
             qos_profile_sensor_data
         )
@@ -40,6 +40,7 @@ class LaneDetector(Node):
         self.debug_pub = self.create_publisher(Image, "/lane_debug", 10)
         self.error_pub = self.create_publisher(Float32, "/lane_error", 10)
         self.target_pub = self.create_publisher(PointStamped, "/lane_target", 10)
+        self.color_pub = self.create_publisher(Image, "/color_debug", 10)
 
 
     def image_callback(self, msg):
@@ -51,6 +52,11 @@ class LaneDetector(Node):
         output_img = detection_output["image"]
         left_line = detection_output["left_line"]
         right_line = detection_output["right_line"]
+        color_mask = detection_output["color_mask"]
+
+        color_seg_msg = self.bridge.cv2_to_imgmsg(color_mask, encoding="mono8")
+        color_seg_msg.header = msg.header
+        self.color_pub.publish(color_seg_msg)
 
         # --- Lookahead position ---
         y_eval = int(img_h * self.lookahead_ratio)
@@ -70,9 +76,9 @@ class LaneDetector(Node):
         if left_x is not None and right_x is not None:
             lane_center = (left_x + right_x) // 2
         elif left_x is not None:
-            lane_center = left_x + 100  # fallback (approx half lane width)
+            lane_center = left_x + 200  # fallback (approx half lane width)
         elif right_x is not None:
-            lane_center = right_x - 100
+            lane_center = right_x - 200
 
         # --- If no detection ---
         if lane_center is None:

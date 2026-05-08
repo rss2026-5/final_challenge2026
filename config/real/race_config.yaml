@@ -6,7 +6,7 @@ lane_detector:
 lane_follower:
   ros__parameters:
     odom_topic: "/pf/pose/odom"
-    drive_topic: "/vesc/input/navigation"
+    drive_topic: "/vesc/high_level/input/nav_2"
 
 race_safety_controller:
   ros__parameters:

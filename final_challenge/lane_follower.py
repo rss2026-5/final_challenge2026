@@ -2,7 +2,7 @@
 import numpy as np
 import rclpy
 from rclpy.node import Node
-from geometry_msgs.msg import PoseArray
+from geometry_msgs.msg import PoseArray, PointStamped
 from nav_msgs.msg import Odometry
 from ackermann_msgs.msg import AckermannDriveStamped
 
@@ -10,17 +10,19 @@ from ackermann_msgs.msg import AckermannDriveStamped
 class LaneFollower(Node):
     def __init__(self):
         super().__init__("lane_follower")
-        
+
         self.declare_parameter('odom_topic', "default")
         self.declare_parameter('drive_topic', "default")
 
         self.odom_topic = self.get_parameter('odom_topic').get_parameter_value().string_value
         self.drive_topic = self.get_parameter('drive_topic').get_parameter_value().string_value
+        self.drive_pub = self.create_publisher(AckermannDriveStamped, self.drive_topic, 10)
 
         self.declare_parameter("line_follower", True)
 
+        self.get_logger().info(f"Drive topic: {self.drive_topic}")
         self.create_subscription(
-            PointStamped, "/lane_target", self.target_callback, 1)
+            PointStamped, "/irl_lane_target", self.target_callback, 1)
         
         self.parking_distance = 0.1  # meters; try playing with this number!
         self.relative_x = 0
@@ -75,7 +77,7 @@ class LaneFollower(Node):
         if self.line_follower and velocity < 0:
             velocity = self.speed * 0.5
         """
-        
+        self.get_logger().info(f"Publishing drive: {velocity}")
         drive_cmd.header.frame_id = "base_link"
         drive_cmd.header.stamp = self.get_clock().now().to_msg()
         drive_cmd.drive.speed = velocity
