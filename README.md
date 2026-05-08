@@ -236,3 +236,14 @@ You are encouraged to build your solution on code written in previous labs! If y
 
 *How should the car park in front of the correct part?*
 * The car should consider all objects and stop in front of the correct one for at least 5 seconds.
+
+## Helpful commands
+* ssh -L 6081:localhost:6081 racecar@192.168.1.102
+* ssh racecar@192.168.1.102
+* cd && ./run_rostorch.sh
+* teleop
+* Part A: ros2 launch zed_wrapper zed_camera.launch.py camera_model:=zed
+* Part A: ros2 launch final_challenge race_real.launch.xml
+* Part B: ros2 launch final_challenge boating_real.launch.xml
+* (Xterm in localhost:6081) ros2 run rqt_image_view rqt_image_view
+* (Xterm in localhost:6081) rviz2
