@@ -51,7 +51,7 @@ class RRTStarPlanner(Node):
         self.traj_pub = self.create_publisher(
             PoseArray,
             "/trajectory/current",
-            latched_qos
+            10
         )
 
         self.pose_sub = self.create_subscription(
@@ -65,12 +65,12 @@ class RRTStarPlanner(Node):
         self.current_pose = None
 
         # RRT* parameters (pixel space unless noted)
-        self.max_iter = 5000
+        self.max_iter = 10000
         self.step_size = 20            # pixels
         self.goal_bias = 0.10          # probability of sampling goal
         self.goal_tol = 15             # pixels — close enough to connect
         self.rewire_radius = 40        # pixels — neighborhood for rewiring
-        self.dilation_iterations = 8
+        self.dilation_iterations = 10
 
         self.trajectory = LineTrajectory(node=self, viz_namespace="/planned_trajectory")
 
@@ -235,6 +235,21 @@ class RRTStarPlanner(Node):
             path.append(node.pos)
             node = node.parent
         path.reverse()
+
+        #Smooth paths by searching for shortcuts
+        if len(path) > 2:
+            smoothed = [path[0]]
+            i = 0
+            while i < len(path) - 1:
+                j = len(path) - 1
+                while j> i + 1 and not connectible(path[i], path[j]):
+                    j -= 1
+                smoothed.append(path[j])
+                i = j
+            self.get_logger().info(
+                f'Shortcut smoothing: {len(path)} -> {len(smoothed)} waypoints'
+            )
+            path = smoothed
 
         #Publish
         for (u, v) in path:

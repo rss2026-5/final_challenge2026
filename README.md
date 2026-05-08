@@ -247,3 +247,4 @@ You are encouraged to build your solution on code written in previous labs! If y
 * Part B: ros2 launch final_challenge boating_real.launch.xml
 * (Xterm in localhost:6081) ros2 run rqt_image_view rqt_image_view
 * (Xterm in localhost:6081) rviz2
+* ros2 topic pub --once --qos-durability transient_local /exploring_challenge geometry_msgs/msg/PoseArray "{header: {frame_id: 'map'}, poses: [{position: {x: -5.4, y: 22.39, z: 0.0}, orientation: {w: 1.0}}, {position: {x: -20.0, y: 26.3, z: 0.0}, orientation: {w: 1.0}}]}"

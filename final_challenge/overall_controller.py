@@ -8,7 +8,6 @@ from geometry_msgs.msg import PoseArray, Pose, PoseStamped
 from nav_msgs.msg import Odometry
 from std_msgs.msg import Bool, String
 from ackermann_msgs.msg import AckermannDriveStamped
-from rclpy.qos import QoSProfile, QoSDurabilityPolicy
 
 
 def yaw_from_quaternion(x: float, y: float, z: float, w: float) -> float:
@@ -76,11 +75,8 @@ class OverallController(Node):
         self.parking_timer = None
 
         # Subscribers
-        # /exploring_challenge uses TRANSIENT_LOCAL in case basement point publisher predates our node
-        latched_qos = QoSProfile(
-            depth=1, durability=QoSDurabilityPolicy.TRANSIENT_LOCAL)
         self.goals_sub = self.create_subscription(
-            PoseArray, "/exploring_challenge", self.goals_cb, latched_qos)
+            PoseArray, "/exploring_challenge", self.goals_cb, 10)
         self.odom_sub = self.create_subscription(
             Odometry, odom_topic, self.odom_cb, 10)
         self.detection_sub = self.create_subscription(
@@ -106,21 +102,35 @@ class OverallController(Node):
             self.startup_delay_sec, self._on_startup_complete
         )
 
+        # 1Hz heartbeat with state + localization + goal progress
+        self._first_odom_logged = False
+        self._first_traffic_logged = False
+        self._heartbeat_timer = self.create_timer(1.0, self._heartbeat)
+
         self.get_logger().info(
             f"OverallController initialized; waiting {self.startup_delay_sec:.1f}s "
             "for localization before accepting goals..."
+            f" (odom_topic={odom_topic}, drive_topic={drive_topic})"
         )
 
     def goals_cb(self, msg: PoseArray):
         """Receive goal sequence from course staff. Only processed once in IDLE."""
+        self.get_logger().info(
+            f"[goals_cb] received {len(msg.poses)} goal(s) "
+            f"(state={self.state.value}, localization_ready={self._localization_ready})"
+        )
         if self.state != State.IDLE:
+            self.get_logger().info(
+                f"[goals_cb] ignoring — already past IDLE (state={self.state.value})"
+            )
             return
 
         if not self._localization_ready:
             #Process upon localization warmup's conclusion
             self._pending_goals = msg
             self.get_logger().info(
-                "Goals received before localization warmup finished; deferring."
+                "[goals_cb] localization warmup not finished; deferring "
+                f"({len(msg.poses)} goals queued)."
             )
             return
 
@@ -149,6 +159,12 @@ class OverallController(Node):
         quat = msg.pose.pose.orientation
         yaw = yaw_from_quaternion(quat.x, quat.y, quat.z, quat.w)
         self.current_pose = (pos.x, pos.y, yaw)
+        if not self._first_odom_logged:
+            self._first_odom_logged = True
+            self.get_logger().info(
+                f"[odom_cb] first odom received at "
+                f"({pos.x:.2f}, {pos.y:.2f}, yaw={yaw:.2f})"
+            )
 
         if self.state == State.NAVIGATING:
             dist = self._distance_to_current_goal()
@@ -195,6 +211,15 @@ class OverallController(Node):
 
     def traffic_light_cb(self, msg: Bool):
         """Update red light flag. The control_loop handles stopping."""
+        if not self._first_traffic_logged:
+            self._first_traffic_logged = True
+            self.get_logger().info(
+                f"[traffic_light_cb] first message received: red={msg.data}"
+            )
+        if msg.data != self.red_light_detected:
+            self.get_logger().info(
+                f"[traffic_light_cb] state change: red={msg.data} (state={self.state.value})"
+            )
         self.red_light_detected = msg.data
 
     def control_loop(self):
@@ -235,6 +260,11 @@ class OverallController(Node):
         self._startup_timer.cancel()
         self._startup_timer = None
         self._localization_ready = True
+        self.get_logger().info(
+            "[startup] localization warmup elapsed — accepting goals "
+            f"(time-based gate; not a PF-convergence check). odom_seen={self.current_pose is not None}, "
+            f"pending_goals={'yes' if self._pending_goals is not None else 'no'}"
+        )
 
         if self.current_pose is not None:
             self.start_pose = self.current_pose
@@ -308,9 +338,15 @@ class OverallController(Node):
         goal.header.stamp = self.get_clock().now().to_msg()
         self.goal_pub.publish(goal)
         pos = goal.pose.position
+        cur = self.current_pose
+        cur_str = (
+            f"from ({cur[0]:.2f}, {cur[1]:.2f})"
+            if cur is not None else "from <no odom yet>"
+        )
         self.get_logger().info(
-            f"Published goal {self.current_goal_index} "
-            f"[{goal_type.value}]: ({pos.x:.2f}, {pos.y:.2f})"
+            f"[publish_goal] -> /goal_pose idx={self.current_goal_index}/"
+            f"{len(self.goal_queue)} [{goal_type.value}] "
+            f"target=({pos.x:.2f}, {pos.y:.2f}) {cur_str}"
         )
 
     def _publish_stop(self):
@@ -333,6 +369,30 @@ class OverallController(Node):
         if self.current_goal_index >= len(self.goal_queue):
             return GoalType.PARK
         return self.goal_queue[self.current_goal_index][1]
+
+    def _heartbeat(self):
+        """1Hz status line covering state, localization, goal progress."""
+        odom_str = (
+            f"pose=({self.current_pose[0]:.2f}, {self.current_pose[1]:.2f})"
+            if self.current_pose is not None else "pose=<none>"
+        )
+        if self.goal_queue and self.current_goal_index < len(self.goal_queue):
+            dist = self._distance_to_current_goal()
+            goal_str = (
+                f"goal={self.current_goal_index}/{len(self.goal_queue)} "
+                f"dist={dist:.2f}m"
+            )
+        elif self.goal_queue:
+            goal_str = f"goal=done ({len(self.goal_queue)} total)"
+        elif self._pending_goals is not None:
+            goal_str = f"goal=pending ({len(self._pending_goals.poses)} deferred)"
+        else:
+            goal_str = "goal=<none>"
+        self.get_logger().info(
+            f"[heartbeat] state={self.state.value} "
+            f"loc_ready={self._localization_ready} {odom_str} {goal_str} "
+            f"red={self.red_light_detected}"
+        )
 
     @staticmethod
     def _parse_waypoints(flat):

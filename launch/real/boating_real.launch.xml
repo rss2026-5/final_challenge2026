@@ -6,7 +6,7 @@
     <include file="$(find-pkg-share localization)/launch/localize_real.launch.xml"/>
 
     <!-- Path planning stack -->
-    <node pkg="final_challenge" exec="trajectory_planner" name="trajectory_planner" output="screen">
+    <node pkg="final_challenge" exec="rrt_planner" name="trajectory_planner" output="screen">
         <param from="$(find-pkg-share final_challenge)/config/real/boating_config.yaml"/>
     </node>
 

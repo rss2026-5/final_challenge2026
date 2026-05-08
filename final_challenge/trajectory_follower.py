@@ -22,7 +22,7 @@ class PurePursuit(Node):
         self.drive_topic = self.get_parameter('drive_topic').get_parameter_value().string_value
 
         # Tunable parameters
-        self.lookahead = 1.5          # lookahead distance [m]
+        self.lookahead = 2.5          # lookahead distance [m]
         self.speed = 1.0              # forward speed [m/s]
         self.wheelbase_length = 0.325 # RACECAR wheelbase [m]
         self.max_steer = 0.34         # max steering angle [rad] (~19.5 deg)
@@ -48,9 +48,8 @@ class PurePursuit(Node):
 
         self.pose_sub = self.create_subscription(
             Odometry, self.odom_topic, self.pose_callback, 1)
-        latched_qos = QoSProfile(depth=1, durability=DurabilityPolicy.TRANSIENT_LOCAL)
         self.traj_sub = self.create_subscription(
-            PoseArray, "/trajectory/current", self.trajectory_callback, latched_qos)
+            PoseArray, "/trajectory/current", self.trajectory_callback, 10)
         self.drive_pub = self.create_publisher(
             AckermannDriveStamped, self.drive_topic, 1)
 

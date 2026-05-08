@@ -6,7 +6,7 @@ trajectory_planner:
 trajectory_follower:
   ros__parameters:
     odom_topic: "/pf/pose/odom"
-    drive_topic: "/vesc/input/navigation"
+    drive_topic: "/vesc/high_level/input/nav_2"
 
 safety_controller:
   ros__parameters:
@@ -16,7 +16,7 @@ safety_controller:
 overall_controller:
   ros__parameters:
     odom_topic: "/pf/pose/odom"
-    drive_topic: "/vesc/input/navigation"
+    drive_topic: "/vesc/high_level/input/nav_2"
     goal_arrival_threshold: 0.8
     parking_duration: 5.0
     detection_window: 3.0
@@ -51,7 +51,7 @@ traffic_light_detector:
 # position (homography-projected from object_detector).
 parking_approach:
   ros__parameters:
-    drive_topic: "/vesc/input/navigation"
+    drive_topic: "/vesc/high_level/input/nav_2"
     stop_distance: 1.0
     stop_tolerance: 0.15
     stop_hold_sec: 0.4

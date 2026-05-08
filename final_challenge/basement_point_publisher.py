@@ -33,8 +33,7 @@ class BasementPointPublisher(Node):
             flat = []
         self.goals = [tuple(flat[i:i + 3]) for i in range(0, len(flat), 3)]
 
-        latched = QoSProfile(depth=1, durability=QoSDurabilityPolicy.TRANSIENT_LOCAL)
-        self.pub = self.create_publisher(PoseArray, topic, latched)
+        self.pub = self.create_publisher(PoseArray, topic, 10)
         self._timer = self.create_timer(delay, self._publish_once)
         self.get_logger().info(
             f"Will publish {len(self.goals)} goals to {topic} in {delay:.1f}s"
