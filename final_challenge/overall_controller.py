@@ -114,16 +114,14 @@ class OverallController(Node):
         )
 
     def goals_cb(self, msg: PoseArray):
-        """Receive goal sequence from course staff. Only processed once in IDLE."""
+        """Receive goal sequence from course staff. Accepted at any time —
+        on race day we may need to re-issue goals after a manual abort
+        without relaunching the whole stack.
+        """
         self.get_logger().info(
             f"[goals_cb] received {len(msg.poses)} goal(s) "
             f"(state={self.state.value}, localization_ready={self._localization_ready})"
         )
-        if self.state != State.IDLE:
-            self.get_logger().info(
-                f"[goals_cb] ignoring — already past IDLE (state={self.state.value})"
-            )
-            return
 
         if not self._localization_ready:
             #Process upon localization warmup's conclusion
@@ -133,6 +131,22 @@ class OverallController(Node):
                 f"({len(msg.poses)} goals queued)."
             )
             return
+
+        # Hard reset the FSM. Any in-flight detection/parking timers get
+        # cancelled, queue replaced, return-leg flag cleared. This makes
+        # mid-run re-issuing of goals safe.
+        if self.state != State.IDLE:
+            self.get_logger().info(
+                f"[goals_cb] resetting from {self.state.value} to ingest new goals"
+            )
+            if self.detection_timer is not None:
+                self.detection_timer.cancel()
+                self.detection_timer = None
+            if self.parking_timer is not None:
+                self.parking_timer.cancel()
+                self.parking_timer = None
+            self._return_leg_appended = False
+            self.state = State.IDLE
 
         self._ingest_goals(msg)
 
