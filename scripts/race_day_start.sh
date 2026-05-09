@@ -11,8 +11,9 @@
 # To stop everything cleanly:
 #   bash ~/racecar_ws/src/final_challenge/scripts/race_day_stop.sh
 
-set -uo pipefail
+set -o pipefail
 
+# colcon's setup.bash references some optional unbound vars, so don't `set -u`
 source ~/racecar_ws/install/setup.bash
 
 LOG_DIR=/tmp/race_logs
