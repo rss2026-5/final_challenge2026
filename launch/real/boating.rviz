@@ -5,7 +5,6 @@ Panels:
     Property Tree Widget:
       Expanded:
         - /Global Options1
-        - /TF1
         - /Map1
       Splitter Ratio: 0.5
     Tree Height: 700
@@ -23,22 +22,7 @@ Panels:
 Visualization Manager:
   Class: ""
   Displays:
-    - Alpha: 0.5
-      Cell Size: 1
-      Class: rviz_default_plugins/Grid
-      Color: 160; 160; 164
-      Enabled: true
-      Line Style:
-        Line Width: 0.03
-        Value: Lines
-      Name: Grid
-      Normal Cell Count: 0
-      Offset: { X: 0, Y: 0, Z: 0 }
-      Plane: XY
-      Plane Cell Count: 20
-      Reference Frame: <Fixed Frame>
-      Value: true
-
+    # Map: needs Transient Local because map_server publishes once and latches.
     - Alpha: 0.7
       Class: rviz_default_plugins/Map
       Color Scheme: map
@@ -54,21 +38,7 @@ Visualization Manager:
       Use Timestamp: false
       Value: true
 
-    - Class: rviz_default_plugins/TF
-      Enabled: true
-      Frame Timeout: 15
-      Frames:
-        All Enabled: true
-      Marker Scale: 1
-      Name: TF
-      Show Arrows: true
-      Show Axes: true
-      Show Names: true
-      Tree:
-        {}
-      Update Interval: 0
-      Value: true
-
+    # LaserScan: Best Effort matches the lidar driver QoS.
     - Alpha: 1
       Autocompute Intensity Bounds: true
       Autocompute Value Bounds:
@@ -87,7 +57,7 @@ Visualization Manager:
       Min Color: 0; 0; 0
       Name: LaserScan
       Position Transformer: XYZ
-      Selectable: true
+      Selectable: false
       Size (Pixels): 3
       Size (m): 0.05
       Style: Flat Squares
@@ -101,22 +71,12 @@ Visualization Manager:
       Use rainbow: false
       Value: true
 
+    # PF Odometry: arrow showing the car's current localized pose.
     - Angle Tolerance: 0.1
       Class: rviz_default_plugins/Odometry
       Covariance:
-        Orientation:
-          Alpha: 0.5
-          Color: 255; 255; 127
-          Color Style: Unique
-          Frame: Local
-          Offset: 1
-          Scale: 1
-          Value: true
-        Position:
-          Alpha: 0.3
-          Color: 204; 51; 204
-          Scale: 1
-          Value: true
+        Orientation: { Alpha: 0.5, Color: 255; 255; 127, Color Style: Unique, Frame: Local, Offset: 1, Scale: 1, Value: false }
+        Position: { Alpha: 0.3, Color: 204; 51; 204, Scale: 1, Value: false }
         Value: false
       Enabled: true
       Keep: 1
@@ -141,6 +101,7 @@ Visualization Manager:
         Value: /pf/pose/odom
       Value: true
 
+    # Active Goal: green arrow showing the goal currently published by the FSM.
     - Class: rviz_default_plugins/Pose
       Enabled: true
       Name: Active Goal
@@ -159,6 +120,21 @@ Visualization Manager:
         Value: /goal_pose
       Value: true
 
+    # Planned trajectory: line marker from trajectory_follower.
+    - Class: rviz_default_plugins/Marker
+      Enabled: true
+      Name: Followed Trajectory
+      Namespaces:
+        {}
+      Topic:
+        Depth: 5
+        Durability Policy: Volatile
+        History Policy: Keep Last
+        Reliability Policy: Reliable
+        Value: /followed_trajectory/path
+      Value: true
+
+    # YOLO output with bbox overlay; main CV verification feed.
     - Class: rviz_default_plugins/Image
       Enabled: true
       Max Value: 1
@@ -174,6 +150,7 @@ Visualization Manager:
         Value: /object_detector/debug_image
       Value: true
 
+    # HSV blob overlay; verifies traffic light detection.
     - Class: rviz_default_plugins/Image
       Enabled: true
       Max Value: 1
@@ -193,16 +170,12 @@ Visualization Manager:
   Global Options:
     Background Color: 48; 48; 48
     Fixed Frame: map
-    Frame Rate: 30
+    Frame Rate: 15
   Name: root
   Tools:
     - Class: rviz_default_plugins/Interact
       Hide Inactive Objects: true
     - Class: rviz_default_plugins/MoveCamera
-    - Class: rviz_default_plugins/Select
-    - Class: rviz_default_plugins/FocusCamera
-    - Class: rviz_default_plugins/Measure
-      Line color: 128; 128; 0
     - Class: rviz_default_plugins/SetInitialPose
       Covariance x: 0.25
       Covariance y: 0.25
@@ -213,13 +186,6 @@ Visualization Manager:
         History Policy: Keep Last
         Reliability Policy: Reliable
         Value: /initialpose
-    - Class: rviz_default_plugins/SetGoal
-      Topic:
-        Depth: 5
-        Durability Policy: Volatile
-        History Policy: Keep Last
-        Reliability Policy: Reliable
-        Value: /goal_pose
     - Class: rviz_default_plugins/PublishPoint
       Single click: true
       Topic:
