@@ -2,7 +2,7 @@ import numpy as np
 import rclpy
 
 from ackermann_msgs.msg import AckermannDriveStamped
-from geometry_msgs.msg import PoseArray
+from geometry_msgs.msg import PoseArray, PoseWithCovarianceStamped
 from nav_msgs.msg import Odometry
 from rclpy.node import Node
 from rclpy.qos import DurabilityPolicy, QoSProfile
@@ -41,13 +41,19 @@ class PurePursuit(Node):
         self.seg_lens_sq = None   # (N-1,) squared segment lengths
         self.cum_dist = None      # (N,) cumulative arc-length at each waypoint
 
-        # External pause inputs: stop driving while red light is on.
+        # External pause inputs
         self.red_light = False
+        self.enabled = True  # overall_controller can pause via /trajectory_follower/enabled
         self.tl_sub = self.create_subscription(
             Bool, "/traffic_light/state", self._tl_cb, 10)
+        self.enabled_sub = self.create_subscription(
+            Bool, "/trajectory_follower/enabled", self._enabled_cb, 10)
 
         self.pose_sub = self.create_subscription(
             Odometry, self.odom_topic, self.pose_callback, 1)
+        self.initialpose_sub = self.create_subscription(
+            PoseWithCovarianceStamped, "/initialpose", self._initialpose_cb, 10)
+        latched_qos = QoSProfile(depth=1, durability=DurabilityPolicy.TRANSIENT_LOCAL)
         self.traj_sub = self.create_subscription(
             PoseArray, "/trajectory/current", self.trajectory_callback, 10)
         self.drive_pub = self.create_publisher(
@@ -97,8 +103,18 @@ class PurePursuit(Node):
         elif not self.red_light and was_red:
             self.get_logger().info("Follower: green — resuming")
 
+    def _enabled_cb(self, msg):
+        self.enabled = bool(msg.data)
+        self.get_logger().info(f"Follower: {'enabled' if self.enabled else 'paused by controller'}")
+
+    def _initialpose_cb(self, msg):
+        self.initialized_traj = False
+        self.trajectory.clear()
+        self._publish_drive(0.0, 0.0)
+        self.get_logger().info("Pose estimate reset — trajectory cleared")
+
     def pose_callback(self, odometry_msg):
-        if self.red_light:
+        if self.red_light or not self.enabled:
             self._publish_drive(0.0, 0.0)
             return
         if not self.initialized_traj:

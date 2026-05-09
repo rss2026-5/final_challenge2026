@@ -19,6 +19,7 @@ class LaneFollower(Node):
         self.drive_pub = self.create_publisher(AckermannDriveStamped, self.drive_topic, 10)
 
         self.declare_parameter("line_follower", True)
+        self.line_follower = self.get_parameter("line_follower").get_parameter_value().bool_value
 
         self.get_logger().info(f"Drive topic: {self.drive_topic}")
         self.create_subscription(
@@ -72,11 +73,10 @@ class LaneFollower(Node):
                 # defaults to driving foward, causing the car to circle until the target is within the front cone
                 velocity *= 1
 
-        """
         # Line follower: never reverse, always drive forward
         if self.line_follower and velocity < 0:
             velocity = self.speed * 0.5
-        """
+
         self.get_logger().info(f"Publishing drive: {velocity}")
         drive_cmd.header.frame_id = "base_link"
         drive_cmd.header.stamp = self.get_clock().now().to_msg()

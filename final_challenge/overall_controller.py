@@ -93,6 +93,7 @@ class OverallController(Node):
         # Publishers
         self.goal_pub = self.create_publisher(PoseStamped, "/goal_pose", 10)
         self.drive_pub = self.create_publisher(AckermannDriveStamped, drive_topic, 10)
+        self.follower_enable_pub = self.create_publisher(Bool, "/trajectory_follower/enabled", 10)
 
         # 20Hz control loop
         self.control_timer = self.create_timer(0.05, self.control_loop)
@@ -248,25 +249,37 @@ class OverallController(Node):
         elif self.state in (State.PARKING, State.DONE):
             self._publish_stop()
 
+    def _set_follower_enabled(self, enabled: bool):
+        msg = Bool()
+        msg.data = enabled
+        self.follower_enable_pub.publish(msg)
+
     def _transition_to(self, new_state: State):
         """Handle entry actions for each state."""
         old_state = self.state
         self.state = new_state
         self.get_logger().info(f"State: {old_state.value} -> {new_state.value}")
 
-        if new_state == State.DETECTING:
+        if new_state == State.NAVIGATING:
+            self._set_follower_enabled(True)
+
+        elif new_state == State.DETECTING:
+            self._set_follower_enabled(False)
             self.meter_detected = False
             self.detection_timer = self.create_timer(
                 self.detection_window, self._detection_timeout_cb)
 
         elif new_state == State.PARKING:
+            self._set_follower_enabled(False)
             self.parking_timer = self.create_timer(
                 self.parking_duration, self._parking_complete_cb)
 
         elif new_state == State.RETURNING:
+            self._set_follower_enabled(True)
             self._advance_to_next_goal()
 
         elif new_state == State.DONE:
+            self._set_follower_enabled(False)
             self.get_logger().info("All goals visited. Challenge complete.")
 
     def _on_startup_complete(self):

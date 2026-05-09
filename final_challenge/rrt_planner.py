@@ -9,7 +9,6 @@ from rclpy.qos import QoSProfile, QoSDurabilityPolicy
 import time
 import numpy as np
 from scipy.ndimage import binary_dilation
-from scipy.spatial import KDTree
 
 
 class RRTNode:
@@ -89,6 +88,7 @@ class RRTStarPlanner(Node):
             return
         start = (self.current_pose.position.x, self.current_pose.position.y)
         end = (msg.pose.position.x, msg.pose.position.y)
+        self.get_logger().info(f'Planning from {start} to {end}')
         self.plan_path(start, end, self.map)
 
     def plan_path(self, start_point, end_point, map_msg):
@@ -142,7 +142,8 @@ class RRTStarPlanner(Node):
             N = max(abs(n[0]-m[0]), abs(n[1]-m[1]))
             if N == 0:
                 return True
-            ts = np.linspace(0, 1, N)
+            # N+1 points gives N intervals of size 1/N — guarantees step ≤ 1 pixel
+            ts = np.linspace(0, 1, N + 1)
             us = np.round(ts*n[0] + (1-ts)*m[0]).astype(int)
             vs = np.round(ts*n[1] + (1-ts)*m[1]).astype(int)
             in_bounds = (us >= 0) & (vs >= 0) & (us < width) & (vs < height)
@@ -164,12 +165,12 @@ class RRTStarPlanner(Node):
         self.get_logger().info(f'Start is_free: {is_free(*start_px)}, '
                                 f'Goal is_free: {is_free(*goal_px)}')
 
-        # RRT*
+        # RRT* — vectorized brute-force nearest-neighbor; benchmarked faster than
+        # scipy KDTree at our tree sizes since collision checks dominate.
         start_node = RRTNode(pos=start_px, parent=None, cost=0.0)
         tree = [start_node]
-        tree_positions = [list(start_px)]
+        positions = np.array([list(start_px)], dtype=float)
         goal_node = None
-        kdtree = KDTree(tree_positions)
 
         for iter in range(self.max_iter):
             sample = goal_px
@@ -179,9 +180,9 @@ class RRTStarPlanner(Node):
                 if not is_free(sample[0], sample[1]):
                     continue
 
-            if iter % 50 == 0:
-                kdtree = KDTree(tree_positions)
-            _, idx = kdtree.query(sample)
+            sample_arr = np.array(sample)
+            d_to_sample = np.linalg.norm(positions - sample_arr, axis=1)
+            idx = int(np.argmin(d_to_sample))
             nearest_node = tree[idx]
 
             delta = (sample[0] - nearest_node.pos[0], sample[1] - nearest_node.pos[1])
@@ -193,7 +194,8 @@ class RRTStarPlanner(Node):
             if not is_free(*next_pos) or not connectible(nearest_node.pos, next_pos):
                 continue
 
-            neighbor_indices = kdtree.query_ball_point(next_pos, self.rewire_radius)
+            d_to_new = np.linalg.norm(positions - np.array(next_pos), axis=1)
+            neighbor_indices = np.where(d_to_new <= self.rewire_radius)[0]
             neighbors = [tree[i] for i in neighbor_indices
                          if connectible(tree[i].pos, next_pos)]
 
@@ -207,7 +209,7 @@ class RRTStarPlanner(Node):
 
             next_node = RRTNode(pos=next_pos, parent=best_parent, cost=best_cost)
             tree.append(next_node)
-            tree_positions.append(list(next_pos))
+            positions = np.vstack([positions, list(next_pos)])
 
             for node in neighbors:
                 new_cost = next_node.cost + dist(next_pos, node.pos)
@@ -225,7 +227,12 @@ class RRTStarPlanner(Node):
         self.get_logger().info(f'Tree size after {self.max_iter} iterations: {len(tree)}')
 
         if goal_node is None:
-            self.get_logger().error("RRT* failed to find a path")
+            self.get_logger().error(
+                f"RRT* failed to find a path after {self.max_iter} iters. "
+                f"Tree had {len(tree)} nodes. "
+                f"Start px: {start_px} free={is_free(*start_px)}, "
+                f"Goal px: {goal_px} free={is_free(*goal_px)}"
+            )
             return
 
         #Extract path
