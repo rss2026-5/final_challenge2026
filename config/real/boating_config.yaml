@@ -41,10 +41,26 @@ object_detector:
 traffic_light_detector:
   ros__parameters:
     camera_topic: "/zed/zed_node/rgb/image_rect_color"
-    # Light is mounted on a short pedestal (~30cm), so from the car it
-    # appears in the lower-middle of the frame, not the upper.
-    roi_top_fraction: 0.3
-    roi_bottom_fraction: 0.9
+    # Toy stoplight sits on the floor; appears in the lower-middle to
+    # bottom of the frame from the car's perspective.
+    roi_top_fraction: 0.25
+    roi_bottom_fraction: 0.95
+    # Smaller area → catches the toy light from further away (more time
+    # to brake before reaching the lidar safety zone at 0.4m).
+    min_area_px: 25
+    # Looser HSV — toy LED red de-saturates at distance and under
+    # typical Stata fluorescents.
+    hsv_lower_1: [0, 70, 70]
+    hsv_upper_1: [12, 255, 255]
+    hsv_lower_2: [165, 70, 70]
+    hsv_upper_2: [180, 255, 255]
+    # Toy lights aren't perfectly circular through plastic.
+    min_circularity: 0.45
+    # Trigger faster (2 frames ≈ 70ms) and HOLD MUCH LONGER (60 frames
+    # ≈ 2s) so a momentary frame loss doesn't release the car. Better
+    # to over-stop than to run a red.
+    frames_to_set_red: 2
+    frames_to_clear_red: 60
 
 # Drives the last ~1m to the meter. The TA-published goal pose has
 # hand-placement error, so we close the loop on the actual meter
