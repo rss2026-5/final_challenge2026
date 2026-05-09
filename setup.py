@@ -16,7 +16,8 @@ setup(
         (os.path.join('share', package_name, 'launch', 'sim'),
          glob.glob(os.path.join('launch', 'sim', '*launch.*'))),
         (os.path.join('share', package_name, 'launch', 'real'),
-         glob.glob(os.path.join('launch', 'real', '*launch.*'))),
+         glob.glob(os.path.join('launch', 'real', '*launch.*')) +
+         glob.glob(os.path.join('launch', 'real', '*.rviz'))),
         (os.path.join('share', package_name, 'config', 'sim'),
          glob.glob('config/sim/*.yaml')),
         (os.path.join('share', package_name, 'config', 'real'),
